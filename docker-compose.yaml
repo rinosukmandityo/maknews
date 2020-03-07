@@ -141,6 +141,16 @@ services:
       - '6379:6379'
     volumes:
       - 'redis_data:/bitnami/redis/data'
+  db:
+    image: mysql
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 3306:3306
 
 volumes:
   data01:

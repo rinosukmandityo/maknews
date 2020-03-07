@@ -3,7 +3,7 @@ package elastic
 import (
 	repo "github.com/rinosukmandityo/maknews/repositories"
 
-	elasticapi "gopkg.in/olivere/elastic.v5"
+	elasticapi "github.com/olivere/elastic/v7"
 )
 
 func constructDeleteQuery(param repo.DeleteParam) *elasticapi.BoolQuery {
