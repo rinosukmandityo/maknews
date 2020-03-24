@@ -1072,14 +1072,15 @@ And in this project already included docker compose file to setup following serv
 <li>Kafka  </li>
 <li>ElasticSearch  </li>
 <li>Redis  </li>
+<li>MySQL</li>
 </ul>
 <p>To run all those servers on your local just go to this root directory project and run this following command:<br />
 <code>docker-compose up -d</code> </p>
 <p>But in case this docker compose is not working, you can install all those servers as a standalone application.</p>
 <h2 id="how-to-run">How to run<a class="headerlink" href="#how-to-run" title="Permanent link"></a></h2>
 <h3 id="set-environment-variable">Set Environment Variable<a class="headerlink" href="#set-environment-variable" title="Permanent link"></a></h3>
-<p>This application support 2 kind of database Redis and mySQL to prove our ports is completely agnostic from the implementation.<br />
-By default it will connect into our mySQL database with default host &amp; port <code>127.0.0.1:3306</code> and collection <code>tes</code>.<br />
+<p>This application support 2 kind of database MySQL and MongoDB to prove our ports is completely agnostic from the implementation.<br />
+By default it will connect into our MySQL database with default host &amp; port <code>127.0.0.1:3306</code> and collection <code>tes</code>.<br />
 To connect into different database we need to set database information in environment variable like following example:</p>
 <div class="codehilite"><pre>set url=root:Password.1@tcp(127.0.0.1:3306)/tes  
 set timeout=10  
@@ -1100,21 +1101,9 @@ set kafka_topic=news
 <h3 id="api-list-payloads">API List &amp; Payloads<a class="headerlink" href="#api-list-payloads" title="Permanent link"></a></h3>
 <p>Here is our API List and its payload:  </p>
 <ol>
-<li><strong>/news</strong> [GET]<br />
-<div class="codehilite"><pre><span class="p">{</span>
-    <span class="nx">Filter</span><span class="o">:</span> <span class="p">{}</span>
-    <span class="nx">Offset</span><span class="o">:</span> <span class="mi">0</span><span class="p">,</span>
-    <span class="nx">Limit</span><span class="o">:</span>  <span class="mi">10</span>
-<span class="p">}</span>
-</pre></div>
-OR use filter to specify the data
-<div class="codehilite"><pre><span class="p">{</span>
-    <span class="nx">Filter</span><span class="o">:</span> <span class="p">{</span><span class="nx">id</span><span class="o">:</span> <span class="mi">1</span><span class="p">},</span>
-    <span class="nx">Offset</span><span class="o">:</span> <span class="mi">0</span><span class="p">,</span>
-    <span class="nx">Limit</span><span class="o">:</span>  <span class="mi">10</span>
-<span class="p">}</span>
-</pre></div></li>
-<li><strong>/news</strong> [POST]<br />
+<li>[GET] <strong>/news?offset=0&amp;limit=10</strong><br />
+<code>/news?offset=0&amp;limit=10</code></li>
+<li>[POST] <strong>/news</strong><br />
 <div class="codehilite"><pre><span class="p">{</span>
     <span class="nx">ID</span><span class="o">:</span>      <span class="mi">15</span><span class="p">,</span>
     <span class="nx">Author</span><span class="o">:</span>  <span class="s2">&quot;Rest&quot;</span><span class="p">,</span>
@@ -1122,13 +1111,24 @@ OR use filter to specify the data
     <span class="nx">Created</span><span class="o">:</span> <span class="s2">&quot;2020-03-01T22:59:59.999Z&quot;</span>
 <span class="p">}</span>
 </pre></div></li>
+<li>[PUT] <strong>/news/{<em>news_id</em>}</strong><br />
+<code>/news/15</code>
+<div class="codehilite"><pre><span class="p">{</span>
+    <span class="nx">ID</span><span class="o">:</span>      <span class="mi">15</span><span class="p">,</span>
+    <span class="nx">Author</span><span class="o">:</span>  <span class="s2">&quot;Rest&quot;</span><span class="p">,</span>
+    <span class="nx">Body</span><span class="o">:</span>    <span class="s2">&quot;Hello this is news from REST&quot;</span><span class="p">,</span>
+    <span class="nx">Created</span><span class="o">:</span> <span class="s2">&quot;2020-03-01T22:59:59.999Z&quot;</span>
+<span class="p">}</span>
+</pre></div></li>
+<li>[DELETE] <strong>/news/{<em>news_id</em>}</strong><br />
+<code>/news/15</code></li>
 </ol>
 <h3 id="the-service-that-we-are-going-to-build">The service that we are going to build<a class="headerlink" href="#the-service-that-we-are-going-to-build" title="Permanent link"></a></h3>
-<p>So we have our service which is a news and it will connect to serializer which will either serialize the data into json or message pack before serving it through REST API<br />
-And then on the other side we have our repository which will either choose to use mySQL or Redis based on how we start the application from command line.<br />
-So basically our API will be able to accept JSON or message pack format and also our repository is able to use both mySQL and Redis and it won&rsquo;t really affect our service  </p>
+<p>We have our service which is a news and it will connect to serializer which will either serialize the data into json or message pack before serving it through REST API<br />
+And then on the other side we have our repository which will either choose to use MySQL or MongoDB based on how we start the application from command line.<br />
+So basically our API will be able to accept JSON or message pack format and also our repository is able to use both MySQL and MongoDB and it won&rsquo;t really affect our service  </p>
 <h4 id="table-structure">Table Structure<a class="headerlink" href="#table-structure" title="Permanent link"></a></h4>
-<p>Here is table structure for mySQL table:<br />
+<p>Here is table structure for MySQL table:<br />
 - id INT<br />
 - author TEXT<br />
 - body TEXT<br />
@@ -1157,13 +1157,17 @@ contains data models</li>
 <li><strong>repositories</strong><br />
 contains <strong>Port</strong> interface for repository adapter
    - <strong>mysql</strong><br />
-contains mySQL <strong>Adapter</strong> that implement NewsRepository interface. This package will store mySQL client and connect to mySQL database to handle database query or command. Complete news data will be stored here.
-   - <strong>redis</strong><br />
-contains redis <strong>Adapter</strong> that implement NewsRepository interface. This package will store redis client and connect to redis server to handle database query or data manipulation
-   - <strong>elasticsearch</strong><br />
-contains elasticsearch <strong>Adapter</strong> that implement NewsRepository interface. This package will store elasticsearch client and connect to elasticsearch server to handle database query or command. ID and news date creation will be stored here.
-   - <strong>kafka</strong><br />
+contains mySQL <strong>Adapter</strong> that implement NewsRepository interface. This package will store mySQL client and connect to mySQL database to handle database query or command. Complete news data will be stored here.<ul>
+<li><strong>mongodb</strong><br />
+contains mongoDB <strong>Adapter</strong> that implement NewsRepository interface. This package will store mongoDB client and connect to mongoDB database to handle database query or command. Complete news data will be stored here.</li>
+<li><strong>redis</strong><br />
+contains redis <strong>Adapter</strong> that implement CacheRepository interface. This package will store redis client and connect to redis server to handle database query or data manipulation</li>
+<li><strong>elasticsearch</strong><br />
+contains elasticsearch <strong>Adapter</strong> that implement ElasticRepository interface. This package will store elasticsearch client and connect to elasticsearch server to handle database query or command. ID and news date creation will be stored here.</li>
+<li><strong>kafka</strong><br />
 contains kafka <strong>Adapter</strong> that store kafka connection and has several methods to handle message write and message read from kafka server.</li>
+</ul>
+</li>
 <li><strong>serializer</strong><br />
 contains <strong>Port</strong> interface for decode and encode serializer. It will be used in our API to decode and encode data.
    - <strong>json</strong><br />

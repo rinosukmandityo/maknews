@@ -16,6 +16,7 @@ And in this project already included docker compose file to setup following serv
 - Kafka  
 - ElasticSearch  
 - Redis  
+- MySQL
 
 To run all those servers on your local just go to this root directory project and run this following command:  
 `docker-compose up -d` 
@@ -25,8 +26,8 @@ But in case this docker compose is not working, you can install all those server
 How to run
 ---
 ### Set Environment Variable
-This application support 2 kind of database Redis and mySQL to prove our ports is completely agnostic from the implementation.  
-By default it will connect into our mySQL database with default host & port `127.0.0.1:3306` and collection `tes`.  
+This application support 2 kind of database MySQL and MongoDB to prove our ports is completely agnostic from the implementation.  
+By default it will connect into our MySQL database with default host & port `127.0.0.1:3306` and collection `tes`.  
 To connect into different database we need to set database information in environment variable like following example:
 
 ```cli
@@ -76,12 +77,12 @@ Here is our API List and its payload:
 
 ### The service that we are going to build  
 
-So we have our service which is a news and it will connect to serializer which will either serialize the data into json or message pack before serving it through REST API  
-And then on the other side we have our repository which will either choose to use mySQL or Redis based on how we start the application from command line.  
-So basically our API will be able to accept JSON or message pack format and also our repository is able to use both mySQL and Redis and it won't really affect our service  
+We have our service which is a news and it will connect to serializer which will either serialize the data into json or message pack before serving it through REST API  
+And then on the other side we have our repository which will either choose to use MySQL or MongoDB based on how we start the application from command line.  
+So basically our API will be able to accept JSON or message pack format and also our repository is able to use both MySQL and MongoDB and it won't really affect our service  
 
 #### Table Structure
-Here is table structure for mySQL table:  
+Here is table structure for MySQL table:  
 - id INT  
 - author TEXT  
 - body TEXT  
@@ -111,10 +112,12 @@ contains data models
 contains **Port** interface for repository adapter
    - **mysql**  
 contains mySQL **Adapter** that implement NewsRepository interface. This package will store mySQL client and connect to mySQL database to handle database query or command. Complete news data will be stored here.
+	- **mongodb**  
+contains mongoDB **Adapter** that implement NewsRepository interface. This package will store mongoDB client and connect to mongoDB database to handle database query or command. Complete news data will be stored here.
    - **redis**  
-contains redis **Adapter** that implement NewsRepository interface. This package will store redis client and connect to redis server to handle database query or data manipulation
+contains redis **Adapter** that implement CacheRepository interface. This package will store redis client and connect to redis server to handle database query or data manipulation
    - **elasticsearch**  
-contains elasticsearch **Adapter** that implement NewsRepository interface. This package will store elasticsearch client and connect to elasticsearch server to handle database query or command. ID and news date creation will be stored here.
+contains elasticsearch **Adapter** that implement ElasticRepository interface. This package will store elasticsearch client and connect to elasticsearch server to handle database query or command. ID and news date creation will be stored here.
    - **kafka**  
 contains kafka **Adapter** that store kafka connection and has several methods to handle message write and message read from kafka server.
 4. **serializer**  
