@@ -1,9 +1,9 @@
 package api
 
 import (
-	slz "github.com/rinosukmandityo/maknews/serializer"
-	js "github.com/rinosukmandityo/maknews/serializer/json"
-	ms "github.com/rinosukmandityo/maknews/serializer/msgpack"
+	slz "github.com/rinosukmandityo/maknews/api/serializer"
+	js "github.com/rinosukmandityo/maknews/api/serializer/json"
+	ms "github.com/rinosukmandityo/maknews/api/serializer/msgpack"
 )
 
 var (

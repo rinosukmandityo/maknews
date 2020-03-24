@@ -15,10 +15,10 @@ import (
 	"time"
 
 	. "github.com/rinosukmandityo/maknews/api"
-	"github.com/rinosukmandityo/maknews/logic"
 	m "github.com/rinosukmandityo/maknews/models"
 	repo "github.com/rinosukmandityo/maknews/repositories"
 	rh "github.com/rinosukmandityo/maknews/repositories/helper"
+	"github.com/rinosukmandityo/maknews/services/logic"
 
 	"github.com/go-chi/chi"
 )
