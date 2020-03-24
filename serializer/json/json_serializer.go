@@ -25,18 +25,18 @@ func (u *News) Encode(input *m.News) ([]byte, error) {
 	return rawMsg, nil
 }
 
-func (u *News) DecodeGetPayload(input []byte) (m.GetPayload, error) {
-	res := m.GetPayload{}
+func (u *News) DecodeMap(input []byte) (map[string]interface{}, error) {
+	res := map[string]interface{}{}
 	if e := json.Unmarshal(input, &res); e != nil {
-		return res, errors.Wrap(e, "serializer.Logic.DecodeGetPayload")
+		return res, errors.Wrap(e, "serializer.Logic.DecodeMap")
 	}
 	return res, nil
 }
 
-func (u *News) EncodeGetPayload(input *m.GetPayload) ([]byte, error) {
+func (u *News) EncodeMap(input map[string]interface{}) ([]byte, error) {
 	rawMsg, e := json.Marshal(input)
 	if e != nil {
-		return nil, errors.Wrap(e, "serializer.Logic.EncodeGetPayload")
+		return nil, errors.Wrap(e, "serializer.Logic.EncodeMap")
 	}
 	return rawMsg, nil
 }

@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	repo "github.com/rinosukmandityo/maknews/repositories"
+	m "github.com/rinosukmandityo/maknews/models"
 )
 
-func constructUpdateQuery(param repo.UpdateParam) (string, []interface{}) {
+func constructUpdateQuery(data, filter map[string]interface{}) (string, []interface{}) {
 	// 	"UPDATE <tablename> SET field1=?, field2=?  WHERE filter1=?"
-	data := param.Data.(map[string]interface{})
-	q := fmt.Sprintf("UPDATE %s SET", param.Tablename)
+	q := fmt.Sprintf("UPDATE %s SET", new(m.News).TableName())
 	values := []interface{}{}
 	for k, v := range data {
 		q += fmt.Sprintf(" %s=?,", k)
@@ -18,7 +17,7 @@ func constructUpdateQuery(param repo.UpdateParam) (string, []interface{}) {
 	}
 	q = strings.TrimSuffix(q, ",")
 	q += " WHERE"
-	for k, v := range param.Filter {
+	for k, v := range filter {
 		q += fmt.Sprintf(" %s=?,", k)
 		values = append(values, v)
 	}
@@ -27,11 +26,11 @@ func constructUpdateQuery(param repo.UpdateParam) (string, []interface{}) {
 	return q, values
 }
 
-func constructDeleteQuery(param repo.DeleteParam) (string, []interface{}) {
+func constructDeleteQuery(filter map[string]interface{}) (string, []interface{}) {
 	// 	"DELETE <tablename> WHERE filter1=?"
-	q := fmt.Sprintf("DELETE FROM %s WHERE", param.Tablename)
+	q := fmt.Sprintf("DELETE FROM %s WHERE", new(m.News).TableName())
 	values := []interface{}{}
-	for k, v := range param.Filter {
+	for k, v := range filter {
 		q += fmt.Sprintf(" %s=?,", k)
 		values = append(values, v)
 	}
@@ -40,12 +39,14 @@ func constructDeleteQuery(param repo.DeleteParam) (string, []interface{}) {
 	return q, values
 }
 
-func constructStoreQuery(param repo.StoreParam) (string, []interface{}) {
+func constructStoreQuery(data *m.News) (string, []interface{}) {
 	// 	"INSERT INTO <tablename> VALUES(?, ?, ?, ?)"
-	data := param.Data.([]interface{})
-	q := fmt.Sprintf("INSERT INTO %s VALUES(", param.Tablename)
+	_data := []interface{}{
+		data.ID, data.Author, data.Body, data.Created,
+	}
+	q := fmt.Sprintf("INSERT INTO %s VALUES(", data.TableName())
 	values := []interface{}{}
-	for _, v := range data {
+	for _, v := range _data {
 		q += "?,"
 		values = append(values, v)
 	}
@@ -54,10 +55,10 @@ func constructStoreQuery(param repo.StoreParam) (string, []interface{}) {
 	return q, values
 }
 
-func constructGetBy(param repo.GetParam) string {
+func constructGetBy(filter map[string]interface{}) string {
 	// SELET * FROM <tablename> WHERE filter1=filtervalue
-	q := fmt.Sprintf("SELECT * FROM %s WHERE", param.Tablename)
-	for k, v := range param.Filter {
+	q := fmt.Sprintf("SELECT * FROM %s WHERE", new(m.News).TableName())
+	for k, v := range filter {
 		q += fmt.Sprintf(" %s=%v,", k, v)
 	}
 	q = strings.TrimSuffix(q, ",")

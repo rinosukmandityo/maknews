@@ -29,8 +29,15 @@ func RegisterHandler() *chi.Mux {
 }
 
 func registerNewsHandler(r *chi.Mux, handler NewsHandler) {
-	r.Get("/news", handler.Get)
-	r.Post("/news", handler.Post)
-	r.Post("/update", handler.Update)
-	r.Post("/delete", handler.Delete)
+	// Subrouters:
+	r.Route("/news", func(r chi.Router) {
+		r.Post("/", handler.Post) // POST /news
+		r.Get("/", handler.Get)   // GET /news?offset=0&limit=10
+		// Subrouters:
+		r.Route("/{id}", func(r chi.Router) {
+			r.Use(handler.NewsCtx)
+			r.Put("/", handler.Update)    // PUT /news/newsid01
+			r.Delete("/", handler.Delete) // DELETE /news/newsid01
+		})
+	})
 }

@@ -50,23 +50,9 @@ After setting the database information we only need to run the main.go file
 ### API List & Payloads
 Here is our API List and its payload:  
 
-1. **/news** [GET]  
-```javascript
-{
-	Filter: {}
-	Offset: 0,
-	Limit: 	10
-}
-```  
-OR use filter to specify the data
-```javascript
-{
-	Filter: {id: 1},
-	Offset: 0,
-	Limit: 	10
-}
-```
-2. **/news** [POST]  
+1. [GET] **/news?offset=0&limit=10**  
+`/news?offset=0&limit=10`
+2. [POST] **/news**  
 ```javascript
 {
 	ID: 	 15,
@@ -75,6 +61,18 @@ OR use filter to specify the data
 	Created: "2020-03-01T22:59:59.999Z"
 }
 ```
+3. [PUT] **/news/{_news\_id_}**  
+`/news/15`
+```javascript
+{
+	ID: 	 15,
+	Author:  "Rest",
+	Body: 	 "Hello this is news from REST",
+	Created: "2020-03-01T22:59:59.999Z"
+}
+```
+4. [DELETE] **/news/{_news\_id_}**  
+`/news/15`
 
 ### The service that we are going to build  
 

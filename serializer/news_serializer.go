@@ -7,7 +7,7 @@ import (
 type UserSerializer interface {
 	Decode(input []byte) (*m.News, error)
 	Encode(input *m.News) ([]byte, error)
-	DecodeGetPayload(input []byte) (m.GetPayload, error)
-	EncodeGetPayload(input *m.GetPayload) ([]byte, error)
+	DecodeMap(input []byte) (map[string]interface{}, error)
+	EncodeMap(input map[string]interface{}) ([]byte, error)
 	EncodeGetData(input []m.News) ([]byte, error)
 }

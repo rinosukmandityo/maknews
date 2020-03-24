@@ -8,6 +8,7 @@ import (
 	repo "github.com/rinosukmandityo/maknews/repositories"
 	es "github.com/rinosukmandityo/maknews/repositories/elasticsearch"
 	kf "github.com/rinosukmandityo/maknews/repositories/kafka"
+	mg "github.com/rinosukmandityo/maknews/repositories/mongodb"
 	mr "github.com/rinosukmandityo/maknews/repositories/mysql"
 	rr "github.com/rinosukmandityo/maknews/repositories/redis"
 )
@@ -17,14 +18,17 @@ func ChooseRepo() repo.NewsRepository {
 	db := os.Getenv("db")
 	timeout, _ := strconv.Atoi(os.Getenv("timeout"))
 	switch os.Getenv("driver") {
-	case "redis":
+	case "mongo":
 		if url == "" {
-			url = "redis://:@localhost:6379/0"
+			url = "mongodb://localhost:27017/local"
+		}
+		if db == "" {
+			db = "local"
 		}
 		if timeout == 0 {
 			timeout = 30
 		}
-		repo, e := rr.NewNewsRepository(url, timeout)
+		repo, e := mg.NewNewsRepository(url, db, timeout)
 		if e != nil {
 			log.Fatal(e)
 		}
@@ -49,7 +53,7 @@ func ChooseRepo() repo.NewsRepository {
 	return nil
 }
 
-func ElasticRepo() repo.NewsRepository {
+func ElasticRepo() repo.ElasticRepository {
 	timeout, _ := strconv.Atoi(os.Getenv("elastic_timeout"))
 	if timeout == 0 {
 		timeout = 10
@@ -89,7 +93,7 @@ func KafkaConnection() *kf.KafkaRepository {
 	return repo
 }
 
-func RedisRepo() repo.NewsRepository {
+func RedisRepo() repo.CacheRepository {
 	timeout, _ := strconv.Atoi(os.Getenv("redis_expired"))
 	if timeout == 0 {
 		timeout = 10

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rinosukmandityo/maknews/helper"
+	m "github.com/rinosukmandityo/maknews/models"
 	repo "github.com/rinosukmandityo/maknews/repositories"
 
 	"database/sql"
@@ -37,21 +39,22 @@ func NewNewsRepository(URL, DB string, timeout int) (repo.NewsRepository, error)
 	return repo, nil
 }
 
-func (r *newsMySQLRepository) GetBy(param repo.GetParam) error {
+func (r *newsMySQLRepository) GetBy(filter map[string]interface{}) (*m.News, error) {
+	res := new(m.News)
 	db, e := sqlx.Connect("mysql", r.url)
 	if e != nil {
-		return errors.Wrap(e, "repository.News.GetBy")
+		return res, errors.Wrap(e, "repository.News.GetBy")
 	}
 	defer db.Close()
-	q := constructGetBy(param)
+	q := constructGetBy(filter)
 
-	if e = db.Get(param.Result, q); e != nil {
-		return errors.Wrap(e, "repository.News.GetBy")
+	if e = db.Get(res, q); e != nil {
+		return res, errors.Wrap(e, "repository.News.GetBy")
 	}
-	return nil
+	return res, nil
 
 }
-func (r *newsMySQLRepository) Store(param repo.StoreParam) error {
+func (r *newsMySQLRepository) Store(data *m.News) error {
 	db, e := newNewsClient(r.url)
 	if e != nil {
 		return errors.Wrap(e, "repository.News.Store")
@@ -65,12 +68,12 @@ func (r *newsMySQLRepository) Store(param repo.StoreParam) error {
 	}
 	defer conn.Close()
 
-	q, data := constructStoreQuery(param)
+	q, dataField := constructStoreQuery(data)
 	tx, e := db.Begin()
 	if e != nil {
 		return errors.Wrap(e, "repository.News.Store")
 	}
-	if _, e = tx.ExecContext(ctx, q, data...); e != nil {
+	if _, e = tx.ExecContext(ctx, q, dataField...); e != nil {
 		return errors.Wrap(e, "repository.News.Store")
 	}
 	tx.Commit()
@@ -79,42 +82,48 @@ func (r *newsMySQLRepository) Store(param repo.StoreParam) error {
 
 }
 
-func (r *newsMySQLRepository) Update(param repo.UpdateParam) error {
+func (r *newsMySQLRepository) Update(data map[string]interface{}, id int) (*m.News, error) {
+	news := new(m.News)
 	db, e := newNewsClient(r.url)
 	if e != nil {
-		return errors.Wrap(e, "repository.News.Store")
+		return news, errors.Wrap(e, "repository.News.Store")
 	}
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 	conn, e := db.Conn(ctx)
 	if e != nil {
-		return errors.Wrap(e, "repository.News.Update")
+		return news, errors.Wrap(e, "repository.News.Update")
 	}
 	defer conn.Close()
 
-	q, data := constructUpdateQuery(param)
+	filter := map[string]interface{}{"id": id}
+	q, dataField := constructUpdateQuery(data, filter)
 	stmt, e := conn.PrepareContext(ctx, q)
 	if e != nil {
-		return errors.Wrap(e, "repository.News.Update")
+		return news, errors.Wrap(e, "repository.News.Update")
 	}
 	defer stmt.Close()
-	if res, e := stmt.Exec(data...); e != nil {
-		return errors.Wrap(e, "repository.News.Update")
+	if res, e := stmt.Exec(dataField...); e != nil {
+		return news, errors.Wrap(e, "repository.News.Update")
 	} else {
 		count, e := res.RowsAffected()
 		if e != nil {
-			return errors.Wrap(e, "repository.News.Update")
+			return news, errors.Wrap(e, "repository.News.Update")
 		}
 		if count == 0 {
-			return errors.Wrap(errors.New("Data Not Found"), "repository.News.Update")
+			return news, errors.Wrap(helper.ErrDataNotFound, "repository.News.Update")
 		}
 	}
+	news, e = r.GetBy(filter)
+	if e != nil {
+		return news, errors.Wrap(e, "repository.News.Update")
+	}
 
-	return nil
+	return news, nil
 
 }
-func (r *newsMySQLRepository) Delete(param repo.DeleteParam) error {
+func (r *newsMySQLRepository) Delete(id int) error {
 	db, e := newNewsClient(r.url)
 	if e != nil {
 		return errors.Wrap(e, "repository.News.Delete")
@@ -128,7 +137,8 @@ func (r *newsMySQLRepository) Delete(param repo.DeleteParam) error {
 	}
 	defer conn.Close()
 
-	q, data := constructDeleteQuery(param)
+	filter := map[string]interface{}{"id": id}
+	q, data := constructDeleteQuery(filter)
 	stmt, e := conn.PrepareContext(ctx, q)
 	if e != nil {
 		return errors.Wrap(e, "repository.News.Delete")
@@ -142,7 +152,7 @@ func (r *newsMySQLRepository) Delete(param repo.DeleteParam) error {
 			return errors.Wrap(e, "repository.News.Delete")
 		}
 		if count == 0 {
-			return errors.Wrap(errors.New("Data Not Found"), "repository.News.Delete")
+			return errors.Wrap(helper.ErrDataNotFound, "repository.News.Delete")
 		}
 	}
 

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rinosukmandityo/maknews/models"
+	m "github.com/rinosukmandityo/maknews/models"
 	repo "github.com/rinosukmandityo/maknews/repositories"
 
 	elasticapi "github.com/olivere/elastic/v7"
@@ -31,7 +31,7 @@ func newNewsClient(URL string) (*elasticapi.Client, error) {
 	return client, e
 }
 
-func NewNewsRepository(URL, index string, timeout int) (repo.NewsRepository, error) {
+func NewNewsRepository(URL, index string, timeout int) (repo.ElasticRepository, error) {
 	repo := &newsElasticRepository{
 		index:   index,
 		timeout: time.Duration(timeout) * time.Second,
@@ -61,24 +61,6 @@ func ping(ctx context.Context, client *elasticapi.Client, url string) error {
 	return errors.New("elastic client is nil")
 }
 
-func getResult(param repo.GetParam, searchResult *elasticapi.SearchResult) (e error) {
-	if searchResult.TotalHits() == 0 {
-		return errors.Wrap(errors.New("Data Not Found"), "repository.News.GetBy")
-	}
-	res := []models.ElasticNews{}
-	for _, hit := range searchResult.Hits.Hits {
-		_res := models.ElasticNews{}
-		if e := json.Unmarshal(hit.Source, &_res); e != nil {
-			return errors.Wrap(e, "repository.News.Update")
-		}
-		res = append(res, _res)
-	}
-	resByte, _ := json.Marshal(res)
-	json.Unmarshal(resByte, &param.Result)
-
-	return nil
-}
-
 func CreateIndexIfDoesNotExist(ctx context.Context, client *elasticapi.Client, indexName string) error {
 	exists, e := client.IndexExists(indexName).Do(ctx)
 	if e != nil {
@@ -102,7 +84,23 @@ func CreateIndexIfDoesNotExist(ctx context.Context, client *elasticapi.Client, i
 	return nil
 }
 
-func (r *newsElasticRepository) GetBy(param repo.GetParam) error {
+func getResult(searchResult *elasticapi.SearchResult) ([]m.ElasticNews, error) {
+	res := []m.ElasticNews{}
+	if searchResult.TotalHits() == 0 {
+		return res, errors.Wrap(errors.New("Data Not Found"), "repository.News.GetBy")
+	}
+	for _, hit := range searchResult.Hits.Hits {
+		_res := m.ElasticNews{}
+		if e := json.Unmarshal(hit.Source, &_res); e != nil {
+			return res, errors.Wrap(e, "repository.News.Update")
+		}
+		res = append(res, _res)
+	}
+
+	return res, nil
+}
+
+func (r *newsElasticRepository) GetBy(param m.GetPayload) ([]m.ElasticNews, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -121,25 +119,26 @@ func (r *newsElasticRepository) GetBy(param repo.GetParam) error {
 			searchService.Sort(k, v)
 		}
 	}
+	res := []m.ElasticNews{}
 
 	searchResult, e := searchService.Do(ctx)
 	if e != nil {
-		return errors.Wrap(e, "repository.News.GetBy")
+		return res, errors.Wrap(e, "repository.News.GetBy")
 	}
 
-	if e := getResult(param, searchResult); e != nil {
-		return e
+	res, e = getResult(searchResult)
+	if e != nil {
+		return res, e
 	}
 
-	return nil
+	return res, nil
 }
 
-func (r *newsElasticRepository) Store(param repo.StoreParam) error {
+func (r *newsElasticRepository) Store(data m.ElasticNews) error {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	data := param.Data.(models.ElasticNews)
-	_, e := r.client.Index().Index(r.index).Type(param.Tablename).Id(strconv.Itoa(data.ID)).BodyJson(data).Do(ctx)
+	_, e := r.client.Index().Index(r.index).Type(data.TableName()).Id(strconv.Itoa(data.ID)).BodyJson(data).Do(ctx)
 	if e != nil {
 		return errors.Wrap(e, "repository.News.Store")
 	}
@@ -148,15 +147,14 @@ func (r *newsElasticRepository) Store(param repo.StoreParam) error {
 
 }
 
-func (r *newsElasticRepository) Update(param repo.UpdateParam) error {
+func (r *newsElasticRepository) Update(data m.ElasticNews, id int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	data := param.Data.(map[string]interface{})
-	idInt := strconv.Itoa(param.Filter["id"].(int))
+	idString := strconv.Itoa(id)
 
 	res, e := r.client.Update().Index(r.index).
-		Type(param.Tablename).Id(idInt).Doc(data).Do(ctx)
+		Type(data.TableName()).Id(idString).Doc(data).Do(ctx)
 	if e != nil {
 		return errors.Wrap(e, "repository.News.Update")
 	}
@@ -168,12 +166,12 @@ func (r *newsElasticRepository) Update(param repo.UpdateParam) error {
 	return nil
 
 }
-func (r *newsElasticRepository) Delete(param repo.DeleteParam) error {
+func (r *newsElasticRepository) Delete(id int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	q := constructDeleteQuery(param)
-	res, e := r.client.DeleteByQuery(r.index).Type(param.Tablename).Query(q).Do(ctx)
+	q := constructDeleteQuery(map[string]interface{}{"id": id})
+	res, e := r.client.DeleteByQuery(r.index).Type(new(m.News).TableName()).Query(q).Do(ctx)
 	if e != nil {
 		return errors.Wrap(e, "repository.News.Delete")
 	}

@@ -21,14 +21,10 @@ func NewNewsService(repo repo.NewsRepository) svc.NewsService {
 }
 
 func (u *newsService) GetById(id int) (*m.News, error) {
-	res := new(m.News)
-	param := repo.GetParam{
-		Tablename: res.TableName(),
-		Filter:    map[string]interface{}{"id": id},
-		Result:    res,
-	}
-	if e := u.repo.GetBy(param); e != nil {
-		return res, e
+	filter := map[string]interface{}{"ID": id}
+	res, e := u.repo.GetBy(filter)
+	if e != nil {
+		return res, errs.Wrap(e, "service.News.GetById")
 	}
 
 	return res, nil
@@ -38,46 +34,19 @@ func (u *newsService) Store(data *m.News) error {
 	if e := validate.Validate(data); e != nil {
 		return errs.Wrap(helper.ErrDataInvalid, "service.News.Store")
 	}
-	if data.ID == 0 {
-		data.ID = int(data.Created.UTC().Unix())
-	}
-	param := repo.StoreParam{
-		Tablename: data.TableName(),
-		Data: []interface{}{
-			data.ID, data.Author, data.Body, data.Created,
-		},
-	}
-	return u.repo.Store(param)
+	return u.repo.Store(data)
 
 }
-func (u *newsService) Update(data *m.News) error {
-	if e := validate.Validate(data); e != nil {
-		return errs.Wrap(helper.ErrDataInvalid, "service.News.Update")
+func (u *newsService) Update(data map[string]interface{}, id int) (*m.News, error) {
+	updatedData, e := u.repo.Update(data, id)
+	if e != nil {
+		return updatedData, errs.Wrap(e, "service.News.Update")
 	}
-	if data.ID == 0 {
-		data.ID = int(data.Created.UTC().Unix())
-	}
-	param := repo.UpdateParam{
-		Tablename: data.TableName(),
-		Filter:    map[string]interface{}{"id": data.ID},
-		Data: map[string]interface{}{
-			"author":  data.Author,
-			"body":    data.Body,
-			"created": data.Created,
-		},
-	}
-	return u.repo.Update(param)
+	return updatedData, nil
 
 }
-func (u *newsService) Delete(data *m.News) error {
-	if data.ID == 0 {
-		return errs.Wrap(helper.ErrDataNotFound, "service.News.Delete")
-	}
-	param := repo.DeleteParam{
-		Tablename: data.TableName(),
-		Filter:    map[string]interface{}{"id": data.ID},
-	}
-	if e := u.repo.Delete(param); e != nil {
+func (u *newsService) Delete(id int) error {
+	if e := u.repo.Delete(id); e != nil {
 		return e
 	}
 	return nil

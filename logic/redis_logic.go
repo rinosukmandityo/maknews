@@ -1,52 +1,50 @@
 package logic
 
 import (
-	"encoding/json"
+	"github.com/pkg/errors"
 	m "github.com/rinosukmandityo/maknews/models"
 	repo "github.com/rinosukmandityo/maknews/repositories"
 	svc "github.com/rinosukmandityo/maknews/services"
 )
 
 type redisService struct {
-	repo repo.NewsRepository
+	repo repo.CacheRepository
 }
 
-func NewRedisService(repo repo.NewsRepository) svc.RedisService {
+func NewRedisService(repo repo.CacheRepository) svc.RedisService {
 	return &redisService{
 		repo,
 	}
 }
 
 func (u *redisService) GetData(payload m.GetPayload) ([]m.News, error) {
-	res := []m.News{}
-	param := repo.GetParam{
-		Tablename: new(m.ElasticNews).TableName(),
-		Filter:    payload.Filter,
-		Result:    &res,
-		Offset:    payload.Offset,
-		Limit:     payload.Limit,
-	}
-	if e := u.repo.GetBy(param); e != nil {
-		return res, e
+	res, e := u.repo.GetBy(payload)
+	if e != nil {
+		return res, errors.Wrap(e, "service.News.GetData")
 	}
 
 	return res, nil
 
 }
-func (u *redisService) StoreData(data []m.News, payload m.GetPayload) error {
-	dataBytes, e := json.Marshal(data)
-	if e != nil {
-		return e
-	}
-	payloadData := map[string]interface{}{
-		"data":   dataBytes,
-		"offset": payload.Offset,
-		"limit":  payload.Limit,
-	}
 
-	param := repo.StoreParam{
-		Data: payloadData,
+func (u *redisService) StoreData(data []m.News) error {
+	if e := u.repo.Store(data); e != nil {
+		return errors.Wrap(e, "service.News.Store")
 	}
-	return u.repo.Store(param)
+	return nil
 
+}
+
+func (u *redisService) UpdateData(data m.News) error {
+	if e := u.repo.Update(data); e != nil {
+		return errors.Wrap(e, "service.News.Update")
+	}
+	return nil
+}
+
+func (u *redisService) DeleteData(data m.News) error {
+	if e := u.repo.Delete(data); e != nil {
+		return errors.Wrap(e, "service.News.Update")
+	}
+	return nil
 }

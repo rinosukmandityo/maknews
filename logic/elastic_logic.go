@@ -11,76 +11,43 @@ import (
 )
 
 type elasticService struct {
-	repo repo.NewsRepository
+	repo repo.ElasticRepository
 }
 
-func NewElasticService(repo repo.NewsRepository) svc.ElasticService {
+func NewElasticService(repo repo.ElasticRepository) svc.ElasticService {
 	return &elasticService{
 		repo,
 	}
 }
 
 func (u *elasticService) GetBy(payload m.GetPayload) ([]m.ElasticNews, error) {
-	res := []m.ElasticNews{}
-	param := repo.GetParam{
-		Tablename: new(m.ElasticNews).TableName(),
-		Filter:    payload.Filter,
-		Result:    &res,
-		Offset:    payload.Offset,
-		Limit:     payload.Limit,
-		Order:     map[string]bool{"created": false},
+	payload.Order = map[string]bool{"created": false}
+	res, e := u.repo.GetBy(payload)
+	if e != nil {
+		return res, errs.Wrap(e, "service.ElasticNews.GetBy")
 	}
-	if e := u.repo.GetBy(param); e != nil {
-		return res, e
-	}
-
 	return res, nil
-
 }
 func (u *elasticService) Store(data m.ElasticNews) error {
 	if e := validate.Validate(data); e != nil {
 		return errs.Wrap(helper.ErrDataInvalid, "service.ElasticNews.Store")
 	}
-	if data.ID == 0 {
-		data.ID = int(data.Created.UTC().Unix())
+	if e := u.repo.Store(data); e != nil {
+		return errs.Wrap(e, "service.ElasticNews.Store")
 	}
-	param := repo.StoreParam{
-		Tablename: data.TableName(),
-		Data:      data,
-	}
-	return u.repo.Store(param)
+	return nil
 
 }
 func (u *elasticService) Update(data m.ElasticNews) error {
-	if e := validate.Validate(data); e != nil {
-		return errs.Wrap(helper.ErrDataInvalid, "service.ElasticNews.Update")
+	if e := u.repo.Update(data, data.ID); e != nil {
+		return errs.Wrap(e, "service.ElasticNews.Update")
 	}
-	if data.ID == 0 {
-		data.ID = int(data.Created.UTC().Unix())
-	}
-	param := repo.UpdateParam{
-		Tablename: data.TableName(),
-		Filter: map[string]interface{}{
-			"id": data.ID,
-		},
-		Data: map[string]interface{}{
-			"id":      data.ID,
-			"created": data.Created,
-		},
-	}
-	return u.repo.Update(param)
+	return nil
 
 }
 func (u *elasticService) Delete(data m.ElasticNews) error {
-	if data.ID == 0 {
-		return errs.Wrap(helper.ErrDataNotFound, "service.ElasticNews.Delete")
-	}
-	param := repo.DeleteParam{
-		Tablename: data.TableName(),
-		Filter:    map[string]interface{}{"id": data.ID},
-	}
-	if e := u.repo.Delete(param); e != nil {
-		return e
+	if e := u.repo.Delete(data.ID); e != nil {
+		return errs.Wrap(e, "service.ElasticNews.Delete")
 	}
 	return nil
 
