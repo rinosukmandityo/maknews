@@ -66,6 +66,7 @@ func init() {
 }
 
 func TestService(t *testing.T) {
+	// t.Run("Delete All", DeleteAll)
 	t.Run("Insert Data", InsertData)
 	t.Run("Update Data", UpdateData)
 	t.Run("Delete Data", DeleteData)
@@ -161,4 +162,16 @@ func GetData(t *testing.T) {
 			t.Error("[ERROR] - It should be error 'User Not Found'")
 		}
 	})
+}
+
+func DeleteAll(t *testing.T) {
+	wg := sync.WaitGroup{}
+	for _, data := range ListTestData() {
+		wg.Add(1)
+		go func(_data m.News) {
+			repo.Delete(_data.ID)
+			wg.Done()
+		}(data)
+	}
+	time.Sleep(time.Second * 2)
 }
