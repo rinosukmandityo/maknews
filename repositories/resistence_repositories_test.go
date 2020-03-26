@@ -80,9 +80,7 @@ func InsertData(t *testing.T) {
 	for _, data := range testdata {
 		wg.Add(1)
 		go func(_data m.News) {
-			repo.Delete(map[string]interface{}{
-				"id": _data.ID,
-			})
+			repo.Delete(_data.ID)
 			wg.Done()
 		}(data)
 	}
@@ -92,7 +90,7 @@ func InsertData(t *testing.T) {
 		for _, data := range testdata {
 			wg.Add(1)
 			go func(_data m.News) {
-				if e := repo.Store(data); e != nil {
+				if e := repo.Store(&_data); e != nil {
 					t.Errorf("[ERROR] - Failed to save data %s ", e.Error())
 				}
 				wg.Done()
@@ -114,19 +112,17 @@ func UpdateData(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Update data", func(t *testing.T) {
 		_data := testdata[0]
-		_data.Author += "UPDATED"
+		data := map[string]interface{}{"author": _data.Author + "UPDATED"}
 
-		if e := repo.Update(_data, map[string]interface{}{
-			"id": _data.ID,
-		}); e != nil {
+		if _, e := repo.Update(data, _data.ID); e != nil {
 			t.Errorf("[ERROR] - Failed to update data %s ", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
 		_data := m.News{ID: -9999}
-		if e := repo.Update(_data, map[string]interface{}{
-			"id": _data.ID,
-		}); e == nil {
+		data := map[string]interface{}{"id": _data.ID}
+
+		if _, e := repo.Update(data, _data.ID); e == nil {
 			t.Error("[ERROR] - It should be error 'User Not Found'")
 		}
 	})
@@ -136,17 +132,13 @@ func DeleteData(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Delete data", func(t *testing.T) {
 		_data := testdata[1]
-		if e := repo.Delete(map[string]interface{}{
-			"id": _data.ID,
-		}); e != nil {
+		if e := repo.Delete(_data.ID); e != nil {
 			t.Errorf("[ERROR] - Failed to delete data %s ", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
 		_data := testdata[1]
-		if e := repo.Delete(map[string]interface{}{
-			"id": _data.ID,
-		}); e == nil {
+		if e := repo.Delete(_data.ID); e == nil {
 			t.Error("[ERROR] - It should be error 'User Not Found'")
 		}
 	})
@@ -156,14 +148,14 @@ func GetData(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Get data", func(t *testing.T) {
 		_data := testdata[0]
-		if res, e := repo.GetBy(map[string]interface{}{
+		if _, e := repo.GetBy(map[string]interface{}{
 			"id": _data.ID,
-		}); e != nil || res.ID == 0 {
+		}); e != nil {
 			t.Errorf("[ERROR] - Failed to get data")
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
-		if res, e := repo.GetBy(map[string]interface{}{
+		if _, e := repo.GetBy(map[string]interface{}{
 			"id": -9999,
 		}); e == nil {
 			t.Error("[ERROR] - It should be error 'User Not Found'")
