@@ -21,7 +21,7 @@ import (
 */
 
 var (
-	repo NewsRepository
+	repo ElasticRepository
 )
 
 func ListTestData() []m.ElasticNews {
@@ -58,13 +58,7 @@ func InsertData(t *testing.T) {
 	for _, data := range testdata {
 		wg.Add(1)
 		go func(_data m.ElasticNews) {
-			param := DeleteParam{
-				Tablename: _data.TableName(),
-				Filter: map[string]interface{}{
-					"id": _data.ID,
-				},
-			}
-			repo.Delete(param)
+			repo.Delete(_data.ID)
 			wg.Done()
 		}(data)
 	}
@@ -74,11 +68,7 @@ func InsertData(t *testing.T) {
 		for _, data := range testdata {
 			wg.Add(1)
 			go func(_data m.ElasticNews) {
-				param := StoreParam{
-					Tablename: _data.TableName(),
-					Data:      _data,
-				}
-				if e := repo.Store(param); e != nil {
+				if e := repo.Store(_data); e != nil {
 					t.Errorf("[ERROR] - Failed to save data %s ", e.Error())
 				}
 				wg.Done()
@@ -88,15 +78,14 @@ func InsertData(t *testing.T) {
 
 		time.Sleep(time.Second * 2)
 		for _, data := range testdata {
-			res := []m.ElasticNews{}
-			param := GetParam{
-				Tablename: data.TableName(),
+			param := m.GetPayload{
 				Filter: map[string]interface{}{
 					"id": data.ID,
 				},
-				Result: &res,
+				Offset: 0,
+				Limit:  10,
 			}
-			if e := repo.GetBy(param); e != nil || len(res) == 0 {
+			if res, e := repo.GetBy(param); e != nil || len(res) == 0 {
 				t.Errorf("[ERROR] - Failed to get data")
 			}
 		}
@@ -108,34 +97,14 @@ func UpdateData(t *testing.T) {
 	t.Run("Case 1: Update data", func(t *testing.T) {
 		_data := testdata[0]
 		_data.Created = time.Time{}
-		param := UpdateParam{
-			Tablename: _data.TableName(),
-			Filter: map[string]interface{}{
-				"id": _data.ID,
-			},
-			Data: map[string]interface{}{
-				"id":      _data.ID,
-				"created": _data.Created,
-			},
-		}
 
-		if e := repo.Update(param); e != nil {
+		if e := repo.Update(_data, _data.ID); e != nil {
 			t.Errorf("[ERROR] - Failed to update data %s ", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
 		_data := m.ElasticNews{ID: -9999}
-		param := UpdateParam{
-			Tablename: _data.TableName(),
-			Filter: map[string]interface{}{
-				"id": _data.ID,
-			},
-			Data: map[string]interface{}{
-				"id":      _data.ID,
-				"created": _data.Created,
-			},
-		}
-		if e := repo.Update(param); e == nil {
+		if e := repo.Update(_data, _data.ID); e == nil {
 			t.Error("[ERROR] - It should be error 'Data Not Found'")
 		}
 	})
@@ -145,25 +114,13 @@ func DeleteData(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Delete data", func(t *testing.T) {
 		_data := testdata[1]
-		param := DeleteParam{
-			Tablename: _data.TableName(),
-			Filter: map[string]interface{}{
-				"id": _data.ID,
-			},
-		}
-		if e := repo.Delete(param); e != nil {
+		if e := repo.Delete(_data.ID); e != nil {
 			t.Errorf("[ERROR] - Failed to delete data %s ", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
 		_data := testdata[1]
-		param := DeleteParam{
-			Tablename: _data.TableName(),
-			Filter: map[string]interface{}{
-				"id": _data.ID,
-			},
-		}
-		if e := repo.Delete(param); e == nil {
+		if e := repo.Delete(_data.ID); e == nil {
 			t.Error("[ERROR] - It should be error 'Data Not Found'")
 		}
 	})
@@ -173,67 +130,57 @@ func GetData(t *testing.T) {
 	testdata := ListTestData()
 	_data := testdata[0]
 	t.Run("Case 1: Get data", func(t *testing.T) {
-		res := []m.ElasticNews{}
-		param := GetParam{
-			Tablename: _data.TableName(),
+		param := m.GetPayload{
 			Filter: map[string]interface{}{
 				"id": _data.ID,
 			},
-			Result: &res,
 			Order: map[string]bool{
 				"created": true,
 			},
 			Offset: 0,
 			Limit:  10,
 		}
-		if e := repo.GetBy(param); e != nil || len(res) == 0 {
+		if res, e := repo.GetBy(param); e != nil || len(res) == 0 {
 			t.Errorf("[ERROR] - Failed to get data")
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
-		res := []m.ElasticNews{}
-		param := GetParam{
-			Tablename: _data.TableName(),
+		param := m.GetPayload{
 			Filter: map[string]interface{}{
 				"id": -9999,
 			},
-			Result: &res,
 			Order: map[string]bool{
 				"created": true,
 			},
 			Offset: 0,
 			Limit:  10,
 		}
-		if e := repo.GetBy(param); e == nil {
+		if _, e := repo.GetBy(param); e == nil {
 			t.Error("[ERROR] - It should be error 'Data Not Found'")
 		}
 	})
 }
 
 func GetAll(t *testing.T) {
-	testdata := ListTestData()
 	t.Run("Case 1: Get all data", func(t *testing.T) {
 		res := []m.ElasticNews{}
-		param := GetParam{
-			Tablename: new(m.ElasticNews).TableName(),
-			Result:    &res,
+		param := m.GetPayload{
 			Order: map[string]bool{
 				"created": false,
 			},
 			Offset: 0,
 			Limit:  10,
 		}
-		if e := repo.GetBy(param); e != nil || len(res) == 0 {
+		res, e := repo.GetBy(param)
+		if e != nil || len(res) == 0 {
 			t.Errorf("[ERROR] - Failed to get data")
 		}
-		idList := []int{}
-		for i := len(testdata) - 1; i >= 0; i-- {
-			idList = append(idList, testdata[i].ID)
-		}
-		for i, v := range res {
-			if idList[i] != v.ID {
+		var prevDate time.Time
+		for _, v := range res {
+			if !prevDate.IsZero() && v.Created.After(prevDate) {
 				t.Errorf("[ERROR] - Incorrect order data")
 			}
+			prevDate = v.Created
 		}
 	})
 }
@@ -242,13 +189,7 @@ func DeleteAll(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Delete data", func(t *testing.T) {
 		for _, _data := range testdata {
-			param := DeleteParam{
-				Tablename: _data.TableName(),
-				Filter: map[string]interface{}{
-					"id": _data.ID,
-				},
-			}
-			if e := repo.Delete(param); e != nil {
+			if e := repo.Delete(_data.ID); e != nil {
 				t.Errorf("[ERROR] - Failed to delete data %s ", e.Error())
 			}
 		}
