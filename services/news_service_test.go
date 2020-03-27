@@ -72,7 +72,7 @@ func InsertData(t *testing.T) {
 	for _, data := range testdata {
 		wg.Add(1)
 		go func(_data m.News) {
-			newsService.Delete(&_data)
+			newsService.Delete(_data.ID)
 			wg.Done()
 		}(data)
 	}
@@ -103,14 +103,15 @@ func UpdateData(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Update data", func(t *testing.T) {
 		_data := testdata[0]
-		_data.Author += "UPDATED"
-		if e := newsService.Update(&_data); e != nil {
+		data := map[string]interface{}{"author": _data.Author + "UPDATED"}
+		if _, e := newsService.Update(data, _data.ID); e != nil {
 			t.Errorf("[ERROR] - Failed to update data %s ", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
 		_data := m.News{ID: -999}
-		if e := newsService.Update(&_data); e == nil {
+		data := map[string]interface{}{"id": _data.ID}
+		if _, e := newsService.Update(data, _data.ID); e == nil {
 			t.Error("[ERROR] - It should be error 'User Not Found'")
 		}
 	})
@@ -120,13 +121,13 @@ func DeleteData(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Delete data", func(t *testing.T) {
 		_data := testdata[1]
-		if e := newsService.Delete(&_data); e != nil {
+		if e := newsService.Delete(_data.ID); e != nil {
 			t.Errorf("[ERROR] - Failed to delete data %s ", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
 		_data := testdata[1]
-		if e := newsService.Delete(&_data); e == nil {
+		if e := newsService.Delete(_data.ID); e == nil {
 			t.Error("[ERROR] - It should be error 'User Not Found'")
 		}
 	})
