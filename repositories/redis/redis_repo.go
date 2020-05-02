@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/rinosukmandityo/maknews/helper"
@@ -57,11 +56,12 @@ func (r *newsRedisRepository) GetBy(param m.GetPayload) ([]m.News, error) {
 		if len(dataByte) == 0 {
 			return res, errors.Wrap(helper.ErrDataNotFound, "repository.News.GetBy")
 		}
-		_res := m.News{}
-		if e := json.Unmarshal(dataByte, &_res); e != nil {
+		_res := new(m.News)
+
+		if e := _res.UnmarshalBinary(dataByte); e != nil {
 			return res, errors.Wrap(e, "repository.News.GetBy")
 		}
-		res = append(res, _res)
+		res = append(res, *_res)
 	}
 	return res, nil
 }
@@ -69,8 +69,12 @@ func (r *newsRedisRepository) GetBy(param m.GetPayload) ([]m.News, error) {
 func (r *newsRedisRepository) Store(data []m.News) error {
 	for _, v := range data {
 		key, score := generateKeyScore(v)
-		if _, e := r.client.Set(key, v, r.expiration).Result(); e != nil {
-			return errors.Wrap(e, "repository.News.Update")
+		dataByte, e := v.MarshalBinary()
+		if e != nil {
+			return errors.Wrap(e, "repository.News.Store")
+		}
+		if _, e := r.client.Set(key, string(dataByte), 0).Result(); e != nil {
+			return errors.Wrap(e, "repository.News.Store")
 		}
 		r.client.Expire(key, r.expiration)
 
@@ -86,7 +90,11 @@ func (r *newsRedisRepository) Store(data []m.News) error {
 
 func (r *newsRedisRepository) Update(data m.News) error {
 	key, _ := generateKeyScore(data)
-	if _, e := r.client.Set(key, data, r.expiration).Result(); e != nil {
+	dataByte, e := data.MarshalBinary()
+	if e != nil {
+		return errors.Wrap(e, "repository.News.Update")
+	}
+	if _, e := r.client.Set(key, string(dataByte), 0).Result(); e != nil {
 		return errors.Wrap(e, "repository.News.Update")
 	}
 	r.client.Expire(key, r.expiration)

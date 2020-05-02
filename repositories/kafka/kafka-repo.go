@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/pkg/errors"
@@ -66,16 +67,17 @@ func (k KafkaRepository) ReadMessage(res chan<- []byte) {
 		MaxBytes:  10e3,
 	})
 	ctx := context.Background()
-	st, _ := r.ReadLag(ctx)
-	r.SetOffset(st)
+	lastOffset, _ := k.conn.ReadLastOffset() // get latest offset
+	r.SetOffset(lastOffset)                  // set latest offset
 
 	for {
-		m, err := r.ReadMessage(ctx)
-		if err != nil {
+		m, e := r.ReadMessage(ctx)
+		if e != nil {
+			log.Println("kafka-repo ReadMessage", e.Error())
 			break
 		}
-		res <- m.Value
 		// fmt.Printf("message at offset %d: %s = %s at %v\n", m.Offset, string(m.Key), string(m.Value), m.Time)
+		res <- m.Value
 	}
 
 }

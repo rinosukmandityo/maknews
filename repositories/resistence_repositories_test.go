@@ -25,9 +25,9 @@ import (
 	=======
 	MySQL
 	=======
-	set url=root:Password.1@tcp(127.0.0.1:3306)/tes
+	set url=root:Password.1@tcp(127.0.0.1:3306)/news
 	set timeout=10
-	set db=tes
+	set db=news
 	set driver=mysql
 	=======
 	MongoDB

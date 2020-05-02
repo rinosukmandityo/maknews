@@ -3,6 +3,7 @@ package mysql
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	m "github.com/rinosukmandityo/maknews/models"
 )
@@ -10,6 +11,8 @@ import (
 func constructUpdateQuery(data, filter map[string]interface{}) (string, []interface{}) {
 	// 	"UPDATE <tablename> SET field1=?, field2=?  WHERE filter1=?"
 	q := fmt.Sprintf("UPDATE %s SET", new(m.News).TableName())
+	created, _ := time.Parse("2006-01-02T15:04:05Z", data["created"].(string))
+	data["created"] = created
 	values := []interface{}{}
 	for k, v := range data {
 		q += fmt.Sprintf(" %s=?,", k)

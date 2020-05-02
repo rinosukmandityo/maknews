@@ -35,10 +35,10 @@ func ChooseRepo() repo.NewsRepository {
 		return repo
 	default:
 		if url == "" {
-			url = "root:Password.1@tcp(127.0.0.1:3306)/tes"
+			url = "root:root@tcp(127.0.0.1:3306)/news"
 		}
 		if db == "" {
-			db = "tes"
+			db = "news"
 		}
 		if timeout == 0 {
 			timeout = 10

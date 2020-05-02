@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rinosukmandityo/maknews/helper"
@@ -16,6 +17,7 @@ import (
 )
 
 type newsMySQLRepository struct {
+	baseURL string
 	url     string
 	timeout time.Duration
 }
@@ -31,11 +33,62 @@ func newNewsClient(URL string) (*sql.DB, error) {
 	return db, e
 }
 
+func (r *newsMySQLRepository) createNewTable() error {
+	tablename := new(m.News).TableName()
+	schema := `CREATE TABLE ` + tablename + ` (
+		id INT NOT NULL UNIQUE,
+		author TEXT,
+		body TEXT,
+		created TIMESTAMP
+	);`
+	db, e := sqlx.Connect("mysql", r.url)
+	if e != nil {
+		return errors.Wrap(e, "repository.News.CreateTable")
+	}
+	defer db.Close()
+	res, e := db.Exec(schema)
+	if res != nil && e == nil {
+		fmt.Println("Table", tablename, "created")
+	}
+	return nil
+}
+
+func (r *newsMySQLRepository) testDBConnection() error {
+	dbname := new(m.News).TableName()
+	db, e := sql.Open("mysql", r.url)
+	if e != nil {
+		return e
+	}
+	if e = db.Ping(); e != nil {
+		db.Close()
+		if strings.Contains(strings.ToLower(e.Error()), "unknown database") {
+			db, e = sql.Open("mysql", r.baseURL)
+			if e != nil {
+				return e
+			}
+			defer db.Close()
+			_, e := db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname))
+			if e != nil {
+				fmt.Println(e.Error())
+				return e
+			}
+			fmt.Println("Database", dbname, "created")
+		}
+		return e
+	}
+	db.Close()
+	return nil
+}
+
 func NewNewsRepository(URL, DB string, timeout int) (repo.NewsRepository, error) {
 	repo := &newsMySQLRepository{
+		baseURL: strings.Split(URL, "/")[0] + "/",
 		url:     fmt.Sprintf("%s?parseTime=true", URL),
 		timeout: time.Duration(timeout) * time.Second,
 	}
+	repo.testDBConnection()
+	repo.createNewTable()
+
 	return repo, nil
 }
 

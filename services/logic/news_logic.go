@@ -21,7 +21,7 @@ func NewNewsService(repo repo.NewsRepository) svc.NewsService {
 }
 
 func (u *newsService) GetById(id int) (*m.News, error) {
-	filter := map[string]interface{}{"ID": id}
+	filter := map[string]interface{}{"id": id}
 	res, e := u.repo.GetBy(filter)
 	if e != nil {
 		return res, errs.Wrap(e, "service.News.GetById")

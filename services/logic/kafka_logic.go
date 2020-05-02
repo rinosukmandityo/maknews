@@ -2,11 +2,12 @@ package logic
 
 import (
 	"encoding/json"
+	"time"
+
 	m "github.com/rinosukmandityo/maknews/models"
 	repo "github.com/rinosukmandityo/maknews/repositories"
 	rh "github.com/rinosukmandityo/maknews/repositories/helper"
 	svc "github.com/rinosukmandityo/maknews/services"
-	"time"
 )
 
 type kafkaService struct {
@@ -30,7 +31,7 @@ func (u *kafkaService) WriteMessage(data *m.News) error {
 func (u *kafkaService) ReadMessage(newsSvc svc.NewsService, elasticSvc svc.ElasticService) error {
 	kafka := rh.KafkaConnection()
 
-	dataChan := make(chan []byte)
+	dataChan := make(chan []byte) // it will be sent to ReadMessage function
 
 	go func() {
 		for {
@@ -51,6 +52,7 @@ func (u *kafkaService) ReadMessage(newsSvc svc.NewsService, elasticSvc svc.Elast
 				if e := newsSvc.Store(data); e != nil {
 					return
 				}
+			default:
 			}
 		}
 	}()

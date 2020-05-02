@@ -1080,11 +1080,11 @@ And in this project already included docker compose file to setup following serv
 <h2 id="how-to-run">How to run<a class="headerlink" href="#how-to-run" title="Permanent link"></a></h2>
 <h3 id="set-environment-variable">Set Environment Variable<a class="headerlink" href="#set-environment-variable" title="Permanent link"></a></h3>
 <p>This application support 2 kind of database MySQL and MongoDB to prove our ports is completely agnostic from the implementation.<br />
-By default it will connect into our MySQL database with default host &amp; port <code>127.0.0.1:3306</code> and collection <code>tes</code>.<br />
+By default it will connect into our MySQL database with default host &amp; port <code>127.0.0.1:3306</code> and database <code>news</code>.<br />
 To connect into different database we need to set database information in environment variable like following example:</p>
-<div class="codehilite"><pre>set url=root:Password.1@tcp(127.0.0.1:3306)/tes  
+<div class="codehilite"><pre>set url=root:root@tcp(127.0.0.1:3306)/news  
 set timeout=10  
-set db=tes  
+set db=news  
 set driver=mysql  
 set redis_url=redis://:@localhost:6379/0  
 set redis_timeout=10  

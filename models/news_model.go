@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -22,4 +23,12 @@ type ElasticNews struct {
 
 func (m *ElasticNews) TableName() string {
 	return "news"
+}
+
+func (m News) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, m)
+}
+
+func (m *News) MarshalBinary() ([]byte, error) {
+	return json.Marshal(m)
 }

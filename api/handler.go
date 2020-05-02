@@ -19,7 +19,7 @@ func RegisterHandler() *chi.Mux {
 	kafkaSvc := logic.NewKafkaService()
 	redisSvc := logic.NewRedisService(rh.RedisRepo())
 
-	go func() {
+	go func() { // just assume that this is another service that register kafka topic
 		kafkaSvc.ReadMessage(newsSvc, elasticSvc)
 	}()
 

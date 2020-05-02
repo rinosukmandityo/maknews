@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"gopkg.in/mgo.v2/bson"
+	"reflect"
 	"time"
 
 	"github.com/rinosukmandityo/maknews/helper"
@@ -113,7 +114,12 @@ func (r *newsMongoRepository) Delete(id int) error {
 
 func convertID(data map[string]interface{}) {
 	if _, ok := data["id"]; ok {
-		data["_id"] = data["id"]
+		switch helper.Kind(data["id"]) {
+		case reflect.Float64:
+			data["_id"] = int(data["id"].(float64))
+		case reflect.Int:
+			data["_id"] = data["id"].(int)
+		}
 		delete(data, "id")
 	}
 }

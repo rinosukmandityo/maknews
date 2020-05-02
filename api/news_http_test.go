@@ -5,12 +5,12 @@ package api_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -32,9 +32,9 @@ import (
 	===================================
 	TO SET DATABASE INFO FROM TERMINAL
 	===================================
-	set url=root:Password.1@tcp(127.0.0.1:3306)/tes
+	set url=root:Password.1@tcp(127.0.0.1:3306)/news
 	set timeout=10
-	set db=tes
+	set db=news
 	set driver=mysql
 	set redis_url=redis://:@localhost:6379/0
 	set redis_timeout=10
@@ -48,7 +48,8 @@ import (
 
 var (
 	newsRepo    repo.NewsRepository
-	elasticRepo repo.NewsRepository
+	elasticRepo repo.ElasticRepository
+	cacheRepo   repo.CacheRepository
 	r           *chi.Mux
 	ts          *httptest.Server
 )
@@ -75,6 +76,7 @@ func ListTestData() []m.News {
 func init() {
 	newsRepo = rh.ChooseRepo()
 	elasticRepo = rh.ElasticRepo()
+	cacheRepo = rh.RedisRepo()
 	r = RegisterHandler()
 }
 
@@ -86,10 +88,10 @@ func TestNewsHTTP(t *testing.T) {
 	t.Run("Get All Data", GetAllData)
 	t.Run("Update Data", UpdateData)
 	t.Run("Delete Data", DeleteData)
-	t.Run("Get Data", GetDataByID)
+	// t.Run("Get Data", GetDataByID) // not implemented yet
 }
 
-func PostData(t *testing.T, ts *httptest.Server, url string, _data m.News) error {
+func PostReq(t *testing.T, ts *httptest.Server, url string, _data m.News) error {
 	dataBytes, e := getBytes(_data)
 	if e != nil {
 		return e
@@ -99,26 +101,45 @@ func PostData(t *testing.T, ts *httptest.Server, url string, _data m.News) error
 		return e
 	}
 
-	switch url {
-	case "/news":
-		if resp.StatusCode != http.StatusCreated {
-			return errors.New("status should be 'Status Created' (201)")
-		}
-	default:
-		if resp.StatusCode != http.StatusOK {
-			return errors.New("status should be 'Status OK' (200)")
-		}
+	if resp.StatusCode != http.StatusCreated {
+		return errors.New("status should be 'Status Created' (201)")
 	}
 
 	return nil
 }
 
-func GetData(t *testing.T, ts *httptest.Server, url string, payload m.GetPayload, expected string) error {
-	dataBytes, e := getPayloadBytes(payload)
+func PutReq(t *testing.T, ts *httptest.Server, url string, _data m.News) error {
+	dataBytes, e := getBytes(_data)
 	if e != nil {
 		return e
 	}
-	resp, body, e := makeRequest(t, ts, "GET", url, bytes.NewReader(dataBytes))
+	resp, _, e := makeRequest(t, ts, "PUT", url, bytes.NewReader(dataBytes))
+	if e != nil {
+		return e
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("status should be 'Status OK' (200)")
+	}
+
+	return nil
+}
+
+func DeleteReq(t *testing.T, ts *httptest.Server, url string) error {
+	resp, _, e := makeRequest(t, ts, "DELETE", url, nil)
+	if e != nil {
+		return e
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("status should be 'Status OK' (200)")
+	}
+
+	return nil
+}
+
+func GetReq(t *testing.T, ts *httptest.Server, url string, expected string) error {
+	resp, body, e := makeRequest(t, ts, "GET", url, nil)
 	if e != nil {
 		return e
 	}
@@ -137,49 +158,31 @@ func getBytes(_data m.News) ([]byte, error) {
 	return dataBytes, nil
 }
 
-func getPayloadBytes(_data m.GetPayload) ([]byte, error) {
-	dataBytes, e := GetSerializer(ContentTypeJson).EncodeGetPayload(&_data)
-	if e != nil {
-		return dataBytes, e
-	}
-	return dataBytes, nil
-}
-
 func InsertData(t *testing.T) {
 	newsService := logic.NewNewsService(newsRepo)
 	elasticService := logic.NewElasticService(elasticRepo)
+	cacheService := logic.NewRedisService(cacheRepo)
 
 	testdata := ListTestData()
-	wg := sync.WaitGroup{}
 
 	// Clean test data if any
-	for _, data := range testdata {
-		wg.Add(1)
-		go func(_data m.News) {
-			newsService.Delete(&_data)
-			elData := m.ElasticNews{
-				ID:      _data.ID,
-				Created: _data.Created,
-			}
-			elasticService.Delete(elData)
-			wg.Done()
-		}(data)
+	for _, _data := range testdata {
+		elData := m.ElasticNews{
+			ID:      _data.ID,
+			Created: _data.Created,
+		}
+		newsService.Delete(_data.ID)
+		elasticService.Delete(elData)
+		cacheService.DeleteData(_data)
 	}
-	wg.Wait()
 
 	t.Run("Case 1: Save data", func(t *testing.T) {
 		for _, data := range testdata {
-			wg.Add(1)
-			go func(_data m.News) {
-				if e := PostData(t, ts, "/news", _data); e != nil {
-					t.Errorf("[ERROR] - Failed to save data %s ", e.Error())
-				}
-				wg.Done()
-			}(data)
+			if e := PostReq(t, ts, "/news", data); e != nil {
+				t.Errorf("[ERROR] - Failed to save data %s ", e.Error())
+			}
 		}
-		wg.Wait()
-
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * 2) // waiting until read message finish
 
 		for _, data := range testdata {
 			res, e := newsService.GetById(data.ID)
@@ -188,12 +191,12 @@ func InsertData(t *testing.T) {
 			}
 
 			payload := m.GetPayload{
-				Filter: map[string]interface{}{
-					"id": data.ID,
-				},
+				Offset: 0,
+				Limit:  10,
 			}
+
 			if elRes, e := elasticService.GetBy(payload); e != nil || len(elRes) == 0 {
-				t.Errorf("[ERROR] - Failed to get data")
+				t.Errorf("[ERROR] - Failed to get data from elastic search")
 			}
 		}
 	})
@@ -204,13 +207,13 @@ func UpdateData(t *testing.T) {
 	t.Run("Case 1: Update data", func(t *testing.T) {
 		_data := testdata[0]
 		_data.Author += "UPDATED"
-		if e := PostData(t, ts, "/update", _data); e != nil {
+		if e := PutReq(t, ts, fmt.Sprintf("/news/%d", _data.ID), _data); e != nil {
 			t.Errorf("[ERROR] - Failed to update data %s ", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
 		_data := m.News{ID: -999}
-		if e := PostData(t, ts, "/update", _data); e == nil {
+		if e := PutReq(t, ts, fmt.Sprintf("/news/%d", _data.ID), _data); e == nil {
 			t.Error("[ERROR] - It should be error 'User Not Found'")
 		}
 	})
@@ -220,13 +223,13 @@ func DeleteData(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Delete data", func(t *testing.T) {
 		_data := testdata[1]
-		if e := PostData(t, ts, "/delete", _data); e != nil {
+		if e := DeleteReq(t, ts, fmt.Sprintf("/news/%d", _data.ID)); e != nil {
 			t.Errorf("[ERROR] - Failed to delete data %s ", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
 		_data := testdata[1]
-		if e := PostData(t, ts, "/delete", _data); e == nil {
+		if e := DeleteReq(t, ts, fmt.Sprintf("/news/%d", _data.ID)); e == nil {
 			t.Error("[ERROR] - It should be error 'User Not Found'")
 		}
 	})
@@ -236,18 +239,12 @@ func GetDataByID(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Get Data", func(t *testing.T) {
 		_data := testdata[0]
-		payload := m.GetPayload{
-			Filter: map[string]interface{}{"id": _data.ID},
-		}
-		if e := GetData(t, ts, "/news", payload, _data.Author); e != nil {
+		if e := GetReq(t, ts, fmt.Sprintf("/news/?id=%d&offset=0&limit=10", _data.ID), _data.Author); e != nil {
 			t.Errorf("[ERROR] - Failed to get data %s", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
-		payload := m.GetPayload{
-			Filter: map[string]interface{}{"id": -999},
-		}
-		if e := GetData(t, ts, "/news", payload, ""); e == nil {
+		if e := GetReq(t, ts, "/news/?id=-999&offset=0&limit=10", ""); e == nil {
 			t.Error("[ERROR] - It should be error 'Data Not Found'")
 		}
 	})
@@ -257,11 +254,7 @@ func GetAllData(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Get Data", func(t *testing.T) {
 		_data := testdata[0]
-		payload := m.GetPayload{
-			Offset: 0,
-			Limit:  10,
-		}
-		if e := GetData(t, ts, "/news", payload, _data.Author); e != nil {
+		if e := GetReq(t, ts, "/news?offset=0&limit=10", _data.Author); e != nil {
 			t.Errorf("[ERROR] - Failed to get data %s", e.Error())
 		}
 	})

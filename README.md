@@ -27,13 +27,13 @@ How to run
 ---
 ### Set Environment Variable
 This application support 2 kind of database MySQL and MongoDB to prove our ports is completely agnostic from the implementation.  
-By default it will connect into our MySQL database with default host & port `127.0.0.1:3306` and collection `tes`.  
+By default it will connect into our MySQL database with default host & port `127.0.0.1:3306` and database `news`.  
 To connect into different database we need to set database information in environment variable like following example:
 
 ```cli
-set url=root:Password.1@tcp(127.0.0.1:3306)/tes  
+set url=root:root@tcp(127.0.0.1:3306)/news  
 set timeout=10  
-set db=tes  
+set db=news  
 set driver=mysql  
 set redis_url=redis://:@localhost:6379/0  
 set redis_timeout=10  
