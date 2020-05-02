@@ -81,6 +81,8 @@ func (r *newsMongoRepository) Update(data map[string]interface{}, id int) (*m.Ne
 	c := r.client.Database(r.database).Collection(news.TableName())
 	filter := map[string]interface{}{"_id": id}
 	convertID(data)
+	created, _ := time.Parse("2006-01-02T15:04:05Z", data["created"].(string))
+	data["created"] = created
 	if res, e := c.UpdateOne(ctx, filter, bson.M{"$set": data}, options.Update().SetUpsert(false)); e != nil {
 		return news, errors.Wrap(e, "repository.User.Update")
 	} else {
