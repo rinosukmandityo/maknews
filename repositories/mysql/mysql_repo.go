@@ -102,6 +102,9 @@ func (r *newsMySQLRepository) GetBy(filter map[string]interface{}) (*m.News, err
 	q := constructGetBy(filter)
 
 	if e = db.Get(res, q); e != nil {
+		if e == sql.ErrNoRows {
+			return res, errors.Wrap(helper.ErrDataNotFound, "repository.News.GetBy")
+		}
 		return res, errors.Wrap(e, "repository.News.GetBy")
 	}
 	return res, nil
