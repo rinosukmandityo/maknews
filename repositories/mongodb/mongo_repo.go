@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"fmt"
 	"gopkg.in/mgo.v2/bson"
 	"reflect"
 	"time"
@@ -56,9 +57,9 @@ func (r *newsMongoRepository) GetBy(filter map[string]interface{}) (*m.News, err
 	convertID(filter)
 	if e := c.FindOne(ctx, filter).Decode(res); e != nil {
 		if e == mongo.ErrNoDocuments {
-			return res, errors.Wrap(helper.ErrDataNotFound, "repository.User.GetById")
+			return res, errors.Wrap(helper.ErrDataNotFound, "repository.News.GetById")
 		}
-		return res, errors.Wrap(e, "repository.User.GetById")
+		return res, errors.Wrap(e, "repository.News.GetById")
 	}
 	return res, nil
 
@@ -68,7 +69,7 @@ func (r *newsMongoRepository) Store(data *m.News) error {
 	defer cancel()
 	c := r.client.Database(r.database).Collection(data.TableName())
 	if _, e := c.InsertOne(ctx, data); e != nil {
-		return errors.Wrap(e, "repository.User.Store")
+		return errors.Wrap(e, "repository.News.Store")
 	}
 
 	return nil
@@ -81,18 +82,20 @@ func (r *newsMongoRepository) Update(data map[string]interface{}, id int) (*m.Ne
 	c := r.client.Database(r.database).Collection(news.TableName())
 	filter := map[string]interface{}{"_id": id}
 	convertID(data)
-	created, _ := time.Parse("2006-01-02T15:04:05Z", data["created"].(string))
-	data["created"] = created
+	if fmt.Sprintf("%T", data["created"]) == "string" {
+		created, _ := time.Parse("2006-01-02T15:04:05Z", data["created"].(string))
+		data["created"] = created
+	}
 	if res, e := c.UpdateOne(ctx, filter, bson.M{"$set": data}, options.Update().SetUpsert(false)); e != nil {
-		return news, errors.Wrap(e, "repository.User.Update")
+		return news, errors.Wrap(e, "repository.News.Update")
 	} else {
 		if res.MatchedCount == 0 && res.ModifiedCount == 0 {
-			return news, errors.Wrap(errors.New("User Not Found"), "repository.User.Update")
+			return news, errors.Wrap(helper.ErrDataNotFound, "repository.News.Update")
 		}
 	}
 	news, e := r.GetBy(filter)
 	if e != nil {
-		return news, errors.Wrap(e, "repository.User.Update")
+		return news, errors.Wrap(e, "repository.News.Update")
 	}
 
 	return news, nil
@@ -104,10 +107,10 @@ func (r *newsMongoRepository) Delete(id int) error {
 	filter := map[string]interface{}{"_id": id}
 	c := r.client.Database(r.database).Collection(new(m.News).TableName())
 	if res, e := c.DeleteOne(ctx, filter); e != nil {
-		return errors.Wrap(e, "repository.User.Delete")
+		return errors.Wrap(e, "repository.News.Delete")
 	} else {
 		if res.DeletedCount == 0 {
-			return errors.Wrap(errors.New("User Not Found"), "repository.User.Delete")
+			return errors.Wrap(helper.ErrDataNotFound, "repository.News.Delete")
 		}
 	}
 
