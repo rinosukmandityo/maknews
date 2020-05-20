@@ -14,16 +14,19 @@ func RegisterHandler() *chi.Mux {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 
-	newsSvc := logic.NewNewsService(rh.ChooseRepo())
-	elasticSvc := logic.NewElasticService(rh.ElasticRepo())
-	kafkaSvc := logic.NewKafkaService()
-	redisSvc := logic.NewRedisService(rh.RedisRepo())
+	newsRepo := rh.ChooseRepo()
+	elasticRepo := rh.ElasticRepo()
+	kafkaRepo := rh.KafkaConnection()
+	redisRepo := rh.RedisRepo()
+
+	newsSvc := logic.NewNewsService(newsRepo, redisRepo, elasticRepo, kafkaRepo)
+	kafkaSvc := logic.NewKafkaService(kafkaRepo)
 
 	go func() { // just assume that this is another service that register kafka topic
-		kafkaSvc.ReadMessage(newsSvc, elasticSvc)
+		kafkaSvc.ReadMessage(newsRepo, elasticRepo)
 	}()
 
-	registerNewsHandler(r, NewNewsHandler(newsSvc, elasticSvc, kafkaSvc, redisSvc))
+	registerNewsHandler(r, NewNewsHandler(newsSvc))
 
 	return r
 }

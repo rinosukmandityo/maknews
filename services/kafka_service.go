@@ -1,10 +1,9 @@
 package services
 
 import (
-	m "github.com/rinosukmandityo/maknews/models"
+	repo "github.com/rinosukmandityo/maknews/repositories"
 )
 
 type KafkaService interface {
-	WriteMessage(data *m.News) error
-	ReadMessage(newsSvc NewsService, elasticSvc ElasticService) error
+	ReadMessage(newsRepo repo.NewsRepository, elasticRepo repo.ElasticRepository) error
 }

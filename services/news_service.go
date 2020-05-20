@@ -5,8 +5,9 @@ import (
 )
 
 type NewsService interface {
+	GetData(payload m.GetPayload) ([]m.News, error)
 	GetById(id int) (*m.News, error)
 	Store(data *m.News) error
 	Update(data map[string]interface{}, id int) (*m.News, error)
-	Delete(id int) error
+	Delete(data m.News) error
 }

@@ -2,35 +2,23 @@ package logic
 
 import (
 	"encoding/json"
-	"time"
 
 	m "github.com/rinosukmandityo/maknews/models"
 	repo "github.com/rinosukmandityo/maknews/repositories"
-	rh "github.com/rinosukmandityo/maknews/repositories/helper"
 	svc "github.com/rinosukmandityo/maknews/services"
 )
 
 type kafkaService struct {
-	repo repo.NewsRepository
+	repo repo.KafkaRepository
 }
 
-func NewKafkaService() svc.KafkaService {
-	return &kafkaService{}
+func NewKafkaService(repo repo.KafkaRepository) svc.KafkaService {
+	return &kafkaService{
+		repo,
+	}
 }
 
-func (u *kafkaService) WriteMessage(data *m.News) error {
-	kafka := rh.KafkaConnection()
-	conn := kafka.Conn()
-	defer conn.Close()
-	conn.SetWriteDeadline(time.Now().Add(kafka.Timeout()))
-	msgs, _ := json.Marshal(data)
-	kafka.WriteMessage(msgs)
-	return nil
-
-}
-func (u *kafkaService) ReadMessage(newsSvc svc.NewsService, elasticSvc svc.ElasticService) error {
-	kafka := rh.KafkaConnection()
-
+func (u *kafkaService) ReadMessage(newsRepo repo.NewsRepository, elasticRepo repo.ElasticRepository) error {
 	dataChan := make(chan []byte) // it will be sent to ReadMessage function
 
 	go func() {
@@ -45,11 +33,11 @@ func (u *kafkaService) ReadMessage(newsSvc svc.NewsService, elasticSvc svc.Elast
 					ID:      data.ID,
 					Created: data.Created,
 				}
-				if e := elasticSvc.Store(elasticData); e != nil {
+				if e := elasticRepo.Store(elasticData); e != nil {
 					return
 				}
 
-				if e := newsSvc.Store(data); e != nil {
+				if e := newsRepo.Store(data); e != nil {
 					return
 				}
 			default:
@@ -57,7 +45,7 @@ func (u *kafkaService) ReadMessage(newsSvc svc.NewsService, elasticSvc svc.Elast
 		}
 	}()
 
-	kafka.ReadMessage(dataChan)
+	u.repo.ReadMessage(dataChan)
 
 	return nil
 }

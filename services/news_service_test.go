@@ -131,13 +131,13 @@ func DeleteData(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Delete data", func(t *testing.T) {
 		_data := testdata[1]
-		if e := newsService.Delete(_data.ID); e != nil {
+		if e := newsService.Delete(_data); e != nil {
 			t.Errorf("[ERROR] - Failed to delete data %s ", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
 		_data := testdata[1]
-		if e := newsService.Delete(_data.ID); e == nil {
+		if e := newsService.Delete(_data); e == nil {
 			t.Error("[ERROR] - It should be error 'User Not Found'")
 		}
 	})

@@ -2,14 +2,18 @@ package kafka
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"time"
+
+	m "github.com/rinosukmandityo/maknews/models"
+	repo "github.com/rinosukmandityo/maknews/repositories"
 
 	"github.com/pkg/errors"
 	"github.com/segmentio/kafka-go"
 )
 
-type KafkaRepository struct {
+type kafkaRepository struct {
 	conn    *kafka.Conn
 	url     string
 	topic   string
@@ -24,8 +28,8 @@ func newKafkaConnection(URL, topic string, timeout int) (*kafka.Conn, error) {
 	return kafkaConn, e
 }
 
-func NewKafkaConnection(URL, topic string, timeout int) (*KafkaRepository, error) {
-	repo := &KafkaRepository{
+func NewKafkaConnection(URL, topic string, timeout int) (repo.KafkaRepository, error) {
+	repo := &kafkaRepository{
 		topic:   topic,
 		url:     URL,
 		timeout: time.Duration(timeout) * time.Second,
@@ -40,25 +44,23 @@ func NewKafkaConnection(URL, topic string, timeout int) (*KafkaRepository, error
 	return repo, nil
 }
 
-func (k KafkaRepository) Conn() *kafka.Conn {
-	return k.conn
-}
-
-func (k KafkaRepository) Timeout() time.Duration {
-	return k.timeout
-}
-
-func (k KafkaRepository) WriteMessage(msgs []byte) error {
-	_, e := k.conn.WriteMessages(
-		kafka.Message{Value: msgs},
-	)
+func (k kafkaRepository) WriteMessage(data *m.News) error {
+	msgs, e := json.Marshal(data)
 	if e != nil {
+		return e
+	}
+
+	k.conn.SetWriteDeadline(time.Now().Add(k.timeout))
+
+	if _, e = k.conn.WriteMessages(
+		kafka.Message{Value: msgs},
+	); e != nil {
 		return e
 	}
 	return nil
 }
 
-func (k KafkaRepository) ReadMessage(res chan<- []byte) {
+func (k kafkaRepository) ReadMessage(res chan<- []byte) {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:   []string{k.url},
 		Topic:     k.topic,

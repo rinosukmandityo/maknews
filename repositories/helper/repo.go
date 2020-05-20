@@ -73,7 +73,7 @@ func ElasticRepo() repo.ElasticRepository {
 	return repo
 }
 
-func KafkaConnection() *kf.KafkaRepository {
+func KafkaConnection() repo.KafkaRepository {
 	timeout, _ := strconv.Atoi(os.Getenv("kafka_timeout"))
 	if timeout == 0 {
 		timeout = 10

@@ -50,6 +50,7 @@ var (
 	newsRepo    repo.NewsRepository
 	elasticRepo repo.ElasticRepository
 	cacheRepo   repo.CacheRepository
+	kafkaRepo   repo.KafkaRepository
 	r           *chi.Mux
 	ts          *httptest.Server
 )
@@ -77,6 +78,7 @@ func init() {
 	newsRepo = rh.ChooseRepo()
 	elasticRepo = rh.ElasticRepo()
 	cacheRepo = rh.RedisRepo()
+	kafkaRepo = rh.KafkaConnection()
 	r = RegisterHandler()
 }
 
@@ -159,9 +161,7 @@ func getBytes(_data m.News) ([]byte, error) {
 }
 
 func InsertData(t *testing.T) {
-	newsService := logic.NewNewsService(newsRepo)
-	elasticService := logic.NewElasticService(elasticRepo)
-	cacheService := logic.NewRedisService(cacheRepo)
+	newsService := logic.NewNewsService(newsRepo, cacheRepo, elasticRepo, kafkaRepo)
 
 	testdata := ListTestData()
 
@@ -171,9 +171,9 @@ func InsertData(t *testing.T) {
 			ID:      _data.ID,
 			Created: _data.Created,
 		}
-		newsService.Delete(_data.ID)
-		elasticService.Delete(elData)
-		cacheService.DeleteData(_data)
+		newsService.Delete(_data)
+		elasticRepo.Delete(elData.ID)
+		cacheRepo.Delete(_data)
 	}
 
 	t.Run("Case 1: Save data", func(t *testing.T) {
@@ -195,7 +195,7 @@ func InsertData(t *testing.T) {
 				Limit:  10,
 			}
 
-			if elRes, e := elasticService.GetBy(payload); e != nil || len(elRes) == 0 {
+			if elRes, e := elasticRepo.GetBy(payload); e != nil || len(elRes) == 0 {
 				t.Errorf("[ERROR] - Failed to get data from elastic search")
 			}
 		}
