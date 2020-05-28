@@ -1,4 +1,4 @@
-// +build repo_test
+// +build news_repo
 
 package repositories_test
 
@@ -105,21 +105,18 @@ func InsertData(t *testing.T) {
 			repo.Delete(data.ID)
 		}
 
-		t.Run(tt.name, func(t *testing.T) {
-			for _, data := range testdata {
+		for _, data := range testdata {
+			t.Run(tt.name, func(t *testing.T) {
 				if e := repo.Store(&data); e != tt.expectedErr {
 					t.Errorf("%s %s ", tt.errMsg, e.Error())
 				}
-			}
-
-			for _, data := range testdata {
 				if res, e := repo.GetBy(map[string]interface{}{
 					"id": data.ID,
 				}); e != nil || res.ID == 0 {
 					t.Errorf("[ERROR] - Failed to get data")
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -144,16 +141,15 @@ func UpdateData(t *testing.T) {
 	}
 
 	for _, tt := range tts {
-		testdata := tt.data
-		t.Run(tt.name, func(t *testing.T) {
-			for _, data := range testdata {
+		for _, data := range tt.data {
+			t.Run(tt.name, func(t *testing.T) {
 				if _, e := repo.Update(tt.updatedData, data.ID); e != tt.expectedErr {
 					if !strings.Contains(e.Error(), tt.expectedErr.Error()) {
 						t.Errorf("%s %s ", tt.errMsg, e.Error())
 					}
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -176,16 +172,15 @@ func DeleteData(t *testing.T) {
 	}
 
 	for _, tt := range tts {
-		testdata := tt.data
-		t.Run(tt.name, func(t *testing.T) {
-			for _, data := range testdata {
+		for _, data := range tt.data {
+			t.Run(tt.name, func(t *testing.T) {
 				if e := repo.Delete(data.ID); e != tt.expectedErr {
 					if !strings.Contains(e.Error(), tt.expectedErr.Error()) {
 						t.Errorf("%s %s ", tt.errMsg, e.Error())
 					}
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -208,13 +203,13 @@ func GetData(t *testing.T) {
 	}
 
 	for _, tt := range tts {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, e := repo.GetBy(tt.filter); e != tt.expectedErr {
+		if _, e := repo.GetBy(tt.filter); e != tt.expectedErr {
+			t.Run(tt.name, func(t *testing.T) {
 				if !strings.Contains(e.Error(), tt.expectedErr.Error()) {
 					t.Errorf("%s %s ", tt.errMsg, e.Error())
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
