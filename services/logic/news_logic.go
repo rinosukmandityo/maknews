@@ -121,6 +121,14 @@ func (u *newsService) Store(data *m.News) error {
 		return errs.Wrap(e, "service.News.Store")
 	}
 
+	eNews := m.ElasticNews{
+		ID:      data.ID,
+		Created: data.Created,
+	}
+	if e := u.elasticRepo.Store(eNews); e != nil {
+		return errs.Wrap(e, "service.News.Store")
+	}
+
 	if e := validate.Validate(data); e != nil {
 		return errs.Wrap(helper.ErrDataInvalid, "service.News.Store")
 	}
@@ -132,6 +140,13 @@ func (u *newsService) Update(data map[string]interface{}, id int) (*m.News, erro
 	if e != nil {
 		return updatedData, errs.Wrap(e, "service.News.Update")
 	}
+	eNews := m.ElasticNews{
+		ID:      updatedData.ID,
+		Created: updatedData.Created,
+	}
+	if e := u.elasticRepo.Update(eNews, id); e != nil {
+		return updatedData, e
+	}
 	if e := u.redisRepo.Update(*updatedData); e != nil {
 		return updatedData, e
 	}
@@ -140,6 +155,9 @@ func (u *newsService) Update(data map[string]interface{}, id int) (*m.News, erro
 }
 func (u *newsService) Delete(existingData m.News) error {
 	if e := u.repo.Delete(existingData.ID); e != nil {
+		return e
+	}
+	if e := u.elasticRepo.Delete(existingData.ID); e != nil {
 		return e
 	}
 	if e := u.redisRepo.Delete(existingData); e != nil {

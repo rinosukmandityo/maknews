@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rinosukmandityo/maknews/helper"
 	m "github.com/rinosukmandityo/maknews/models"
 	repo "github.com/rinosukmandityo/maknews/repositories"
 
@@ -160,7 +161,7 @@ func (r *newsElasticRepository) Update(data m.ElasticNews, id int) error {
 	}
 
 	if res.Result != "updated" {
-		return errors.Wrap(errors.New("Data Not Found"), "repository.News.Update")
+		return errors.Wrap(helper.ErrDataNotFound, "repository.News.Update")
 	}
 
 	return nil

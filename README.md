@@ -113,14 +113,23 @@ Here is table structure for MySQL table:
 #### Apps Flow
 The apps flow would be like this:
 
-1. Create news using  [POST] /news url and it will be sent to kafka producer
-2. Kafka consumer will get the data from kafka producer and will store the complete data into mySQL database and for ID & created data will be stored in ElasticSearch (ES)
-3. If we want to retrieve the data we can use [GET] /news:
-	- it will fetch the data from redis and return the data to user
-	- if data in redis already expired or empty it will fetch the data from elasticsearch
+1. Create news using  [POST] /news url:
+	- it will be sent to kafka producer
+	- kafka consumer will get the data from kafka producer and will store the complete data into mySQL database and for ID & created data will be stored in ElasticSearch (ES)
+2. Retrieve news using [GET] /news url:
+	- fetch the data from redis and return the data to user
+	- if data in redis already expired or not exists, it will fetch the data from elasticsearch
 	- data get from elasticsearch will have offset and limit and it will be ordered descending by date creation (created field)
 	- after get data from elasticsearch, it will fetch the data from database one by one using go routine worker
 	- after get the data from database it will store the data into redis as a cache data
+3. Update news using [PUT] /news url:
+	- update data in persistence database (MySQL or MongoDB)
+	- update data in elasticsearch
+	- update data in cache databse (Redis)
+4. Delete news using [DELETE /news url:
+	- delete data in persistence database (MySQL or MongoDB)
+	- delete data in elasticsearch
+	- delete data in cache databse (Redis)
 
 Project Structure
 ---
