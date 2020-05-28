@@ -4,17 +4,17 @@ package api_test
 
 import (
 	"bytes"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
 	. "github.com/rinosukmandityo/maknews/api"
+	"github.com/rinosukmandityo/maknews/helper"
 	m "github.com/rinosukmandityo/maknews/models"
 	repo "github.com/rinosukmandityo/maknews/repositories"
 	rh "github.com/rinosukmandityo/maknews/repositories/helper"
@@ -55,6 +55,16 @@ var (
 	ts          *httptest.Server
 )
 
+type TestTable struct {
+	name               string
+	expectedStatusCode int
+	expectedErr        error
+	errMsg             string
+	updatedData        []map[string]interface{}
+	filter             []map[string]interface{}
+	data               []m.News
+}
+
 func ListTestData() []m.News {
 	return []m.News{{
 		ID:      1,
@@ -93,63 +103,48 @@ func TestNewsHTTP(t *testing.T) {
 	// t.Run("Get Data", GetDataByID) // not implemented yet
 }
 
-func PostReq(t *testing.T, ts *httptest.Server, url string, _data m.News) error {
+func PostReq(t *testing.T, ts *httptest.Server, url string, _data m.News) (*http.Response, string, error) {
 	dataBytes, e := getBytes(_data)
 	if e != nil {
-		return e
+		return nil, "", e
 	}
-	resp, _, e := makeRequest(t, ts, "POST", url, bytes.NewReader(dataBytes))
+	resp, respBody, e := makeRequest(t, ts, "POST", url, bytes.NewReader(dataBytes))
 	if e != nil {
-		return e
+		return resp, respBody, e
 	}
 
-	if resp.StatusCode != http.StatusCreated {
-		return errors.New("status should be 'Status Created' (201)")
-	}
-
-	return nil
+	return resp, respBody, nil
 }
 
-func PutReq(t *testing.T, ts *httptest.Server, url string, _data m.News) error {
-	dataBytes, e := getBytes(_data)
+func PutReq(t *testing.T, ts *httptest.Server, url string, _data map[string]interface{}) (*http.Response, string, error) {
+	dataBytes, e := json.Marshal(_data)
 	if e != nil {
-		return e
+		return nil, "", e
 	}
-	resp, _, e := makeRequest(t, ts, "PUT", url, bytes.NewReader(dataBytes))
+	resp, respBody, e := makeRequest(t, ts, "PUT", url, bytes.NewReader(dataBytes))
 	if e != nil {
-		return e
+		return resp, respBody, e
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("status should be 'Status OK' (200)")
-	}
-
-	return nil
+	return resp, respBody, nil
 }
 
-func DeleteReq(t *testing.T, ts *httptest.Server, url string) error {
-	resp, _, e := makeRequest(t, ts, "DELETE", url, nil)
+func DeleteReq(t *testing.T, ts *httptest.Server, url string) (*http.Response, string, error) {
+	resp, respBody, e := makeRequest(t, ts, "DELETE", url, nil)
 	if e != nil {
-		return e
+		return resp, respBody, e
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("status should be 'Status OK' (200)")
-	}
-
-	return nil
+	return resp, respBody, nil
 }
 
-func GetReq(t *testing.T, ts *httptest.Server, url string, expected string) error {
-	resp, body, e := makeRequest(t, ts, "GET", url, nil)
+func GetReq(t *testing.T, ts *httptest.Server, url string) (*http.Response, string, error) {
+	resp, respBody, e := makeRequest(t, ts, "GET", url, nil)
 	if e != nil {
-		return e
-	}
-	if resp.StatusCode != http.StatusFound && strings.Contains(body, expected) {
-		return errors.New("status should be 'Status Found' (302)")
+		return resp, respBody, e
 	}
 
-	return nil
+	return resp, respBody, nil
 }
 
 func getBytes(_data m.News) ([]byte, error) {
@@ -163,8 +158,17 @@ func getBytes(_data m.News) ([]byte, error) {
 func InsertData(t *testing.T) {
 	newsService := logic.NewNewsService(newsRepo, cacheRepo, elasticRepo, kafkaRepo)
 
-	testdata := ListTestData()
+	tts := []TestTable{
+		{
+			name:               "Case: Positive Test",
+			expectedStatusCode: http.StatusCreated,
+			expectedErr:        nil,
+			errMsg:             "[ERROR] - Status should be 'Status Created' (201)",
+			data:               ListTestData(),
+		},
+	}
 
+	testdata := ListTestData()
 	// Clean test data if any
 	for _, _data := range testdata {
 		elData := m.ElasticNews{
@@ -175,89 +179,139 @@ func InsertData(t *testing.T) {
 		elasticRepo.Delete(elData.ID)
 		cacheRepo.Delete(_data)
 	}
+	time.Sleep(time.Second * 1)
 
-	t.Run("Case 1: Save data", func(t *testing.T) {
-		for _, data := range testdata {
-			if e := PostReq(t, ts, "/news", data); e != nil {
-				t.Errorf("[ERROR] - Failed to save data %s ", e.Error())
-			}
+	for _, tt := range tts {
+		for _, _data := range tt.data {
+			t.Run(tt.name, func(t *testing.T) {
+				if resp, _, e := PostReq(t, ts, "/news", _data); e != tt.expectedErr && resp.StatusCode != tt.expectedStatusCode {
+					t.Errorf("%s %s ", tt.errMsg, e.Error())
+				}
+
+				res, e := newsService.GetById(_data.ID)
+				if e != nil || res.ID == 0 {
+					t.Errorf("[ERROR] - Failed to get data")
+				}
+
+				payload := m.GetPayload{
+					Offset: 0,
+					Limit:  10,
+				}
+
+				if elRes, e := elasticRepo.GetBy(payload); e != nil || len(elRes) == 0 {
+					t.Errorf("[ERROR] - Failed to get data from elastic search")
+				}
+			})
 		}
-		time.Sleep(time.Second * 2) // waiting until read message finish
+	}
 
-		for _, data := range testdata {
-			res, e := newsService.GetById(data.ID)
-			if e != nil || res.ID == 0 {
-				t.Errorf("[ERROR] - Failed to get data")
-			}
-
-			payload := m.GetPayload{
-				Offset: 0,
-				Limit:  10,
-			}
-
-			if elRes, e := elasticRepo.GetBy(payload); e != nil || len(elRes) == 0 {
-				t.Errorf("[ERROR] - Failed to get data from elastic search")
-			}
-		}
-	})
+	time.Sleep(time.Second * 1)
 }
 
 func UpdateData(t *testing.T) {
-	testdata := ListTestData()
-	t.Run("Case 1: Update data", func(t *testing.T) {
-		_data := testdata[0]
-		_data.Author += "UPDATED"
-		if e := PutReq(t, ts, fmt.Sprintf("/news/%d", _data.ID), _data); e != nil {
-			t.Errorf("[ERROR] - Failed to update data %s ", e.Error())
+	tts := []TestTable{
+		{
+			name:               "Case: Positive Test",
+			expectedStatusCode: http.StatusOK,
+			expectedErr:        nil,
+			errMsg:             "[ERROR] - Status should be 'Status OK' (200)",
+			data:               []m.News{ListTestData()[0]},
+			updatedData:        []map[string]interface{}{{"author": ListTestData()[0].Author + "UPDATED"}},
+		},
+		{
+			name:               "Case: Negative Test",
+			expectedStatusCode: http.StatusNotFound,
+			expectedErr:        nil,
+			errMsg:             fmt.Sprintf("[ERROR] - It should be error '%s'", helper.ErrDataNotFound.Error()),
+			data:               []m.News{{ID: -9999}},
+			updatedData:        []map[string]interface{}{{"author": "Data Not Exists"}},
+		},
+	}
+
+	for _, tt := range tts {
+		for i, _data := range tt.data {
+			t.Run(tt.name, func(t *testing.T) {
+				if resp, _, e := PutReq(t, ts, fmt.Sprintf("/news/%d", _data.ID), tt.updatedData[i]); e != tt.expectedErr && resp.StatusCode != tt.expectedStatusCode {
+					t.Errorf("%s %s ", tt.errMsg, e.Error())
+				}
+			})
 		}
-	})
-	t.Run("Case 2: Negative Test", func(t *testing.T) {
-		_data := m.News{ID: -999}
-		if e := PutReq(t, ts, fmt.Sprintf("/news/%d", _data.ID), _data); e == nil {
-			t.Error("[ERROR] - It should be error 'User Not Found'")
-		}
-	})
+	}
+	time.Sleep(time.Second * 1)
 }
 
 func DeleteData(t *testing.T) {
-	testdata := ListTestData()
-	t.Run("Case 1: Delete data", func(t *testing.T) {
-		_data := testdata[1]
-		if e := DeleteReq(t, ts, fmt.Sprintf("/news/%d", _data.ID)); e != nil {
-			t.Errorf("[ERROR] - Failed to delete data %s ", e.Error())
+	tts := []TestTable{
+		{
+			name:               "Case: Positive Test",
+			expectedStatusCode: http.StatusOK,
+			expectedErr:        nil,
+			errMsg:             "[ERROR] - Failed to delete data",
+			data:               []m.News{ListTestData()[1]},
+		},
+		{
+			name:               "Case: Negative Test",
+			expectedStatusCode: http.StatusNotFound,
+			expectedErr:        nil,
+			errMsg:             fmt.Sprintf("[ERROR] - It should be error '%s'", helper.ErrDataNotFound.Error()),
+			data:               []m.News{ListTestData()[1]},
+		},
+	}
+
+	for _, tt := range tts {
+		for _, _data := range tt.data {
+			t.Run(tt.name, func(t *testing.T) {
+				if resp, _, e := DeleteReq(t, ts, fmt.Sprintf("/news/%d", _data.ID)); e != tt.expectedErr && resp.StatusCode != tt.expectedStatusCode {
+					t.Errorf("%s %s ", tt.errMsg, e.Error())
+				}
+			})
 		}
-	})
-	t.Run("Case 2: Negative Test", func(t *testing.T) {
-		_data := testdata[1]
-		if e := DeleteReq(t, ts, fmt.Sprintf("/news/%d", _data.ID)); e == nil {
-			t.Error("[ERROR] - It should be error 'User Not Found'")
-		}
-	})
+	}
+	time.Sleep(time.Second * 1)
 }
 
 func GetDataByID(t *testing.T) {
 	testdata := ListTestData()
 	t.Run("Case 1: Get Data", func(t *testing.T) {
 		_data := testdata[0]
-		if e := GetReq(t, ts, fmt.Sprintf("/news/?id=%d&offset=0&limit=10", _data.ID), _data.Author); e != nil {
+		if _, _, e := GetReq(t, ts, fmt.Sprintf("/news/?id=%d&offset=0&limit=10", _data.ID)); e != nil {
 			t.Errorf("[ERROR] - Failed to get data %s", e.Error())
 		}
 	})
 	t.Run("Case 2: Negative Test", func(t *testing.T) {
-		if e := GetReq(t, ts, "/news/?id=-999&offset=0&limit=10", ""); e == nil {
+		if resp, _, _ := GetReq(t, ts, "/news/?id=-999&offset=0&limit=10"); resp.StatusCode != http.StatusNotFound {
 			t.Error("[ERROR] - It should be error 'Data Not Found'")
 		}
 	})
 }
 
 func GetAllData(t *testing.T) {
-	testdata := ListTestData()
-	t.Run("Case 1: Get Data", func(t *testing.T) {
-		_data := testdata[0]
-		if e := GetReq(t, ts, "/news?offset=0&limit=10", _data.Author); e != nil {
-			t.Errorf("[ERROR] - Failed to get data %s", e.Error())
+	tts := []TestTable{
+		{
+			name:               "Case: Positive Test",
+			expectedStatusCode: http.StatusOK,
+			expectedErr:        nil,
+			errMsg:             "[ERROR] - Failed to get data",
+			filter:             []map[string]interface{}{{"offset": 0, "limit": 10}},
+		},
+		{
+			name:               "Case: Negative Test",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        nil,
+			errMsg:             fmt.Sprintf("[ERROR] - It should be error '%s'", helper.ErrDataNotFound.Error()),
+			filter:             []map[string]interface{}{{"offset": -1, "limit": -10}},
+		},
+	}
+
+	for _, tt := range tts {
+		for _, filter := range tt.filter {
+			t.Run(tt.name, func(t *testing.T) {
+				if resp, _, e := GetReq(t, ts, fmt.Sprintf("/news?offset=%v&limit=%v", filter["offset"], filter["limit"])); e != tt.expectedErr && resp.StatusCode != tt.expectedStatusCode {
+					t.Errorf("%s %s ", tt.errMsg, e.Error())
+				}
+			})
 		}
-	})
+	}
 }
 
 func makeRequest(t *testing.T, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string, error) {

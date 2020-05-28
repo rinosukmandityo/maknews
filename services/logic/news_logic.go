@@ -79,6 +79,13 @@ func (u *newsService) getDataWithWorker(elasticData []m.ElasticNews) []m.News {
 }
 
 func (u *newsService) GetData(payload m.GetPayload) ([]m.News, error) {
+	if payload.Offset < 0 {
+		return []m.News{}, errs.New("Offset can not be less than zero")
+	}
+	if payload.Limit < 0 {
+		return []m.News{}, errs.New("Limit can not be less than zero")
+	}
+
 	data, e := u.redisRepo.GetBy(payload)
 
 	if e != nil || len(data) == 0 {
@@ -91,9 +98,9 @@ func (u *newsService) GetData(payload m.GetPayload) ([]m.News, error) {
 			return data, e
 		}
 		data = u.getDataWithWorker(elasticData)
-	}
-	if e := u.redisRepo.Store(data); e != nil {
-		return data, e
+		if e := u.redisRepo.Store(data); e != nil {
+			return data, e
+		}
 	}
 
 	return data, nil

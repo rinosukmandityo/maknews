@@ -58,9 +58,17 @@ func (u *newshandler) Get(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if q.Get("offset") != "" {
 		payload.Offset, _ = strconv.Atoi(q.Get("offset"))
+		if payload.Offset < 0 {
+			http.Error(w, "Offset can not be less than 0", http.StatusBadRequest)
+			return
+		}
 	}
 	if q.Get("limit") != "" {
 		payload.Limit, _ = strconv.Atoi(q.Get("limit"))
+		if payload.Limit < 0 {
+			http.Error(w, "Limit can not be less than 0", http.StatusBadRequest)
+			return
+		}
 	}
 
 	contentType := r.Header.Get("Content-Type")

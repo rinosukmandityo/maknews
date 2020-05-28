@@ -3,11 +3,13 @@
 package services_test
 
 import (
-	"sync"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
-	_ "github.com/rinosukmandityo/maknews/api"
+	"github.com/rinosukmandityo/maknews/helper"
 	m "github.com/rinosukmandityo/maknews/models"
 	rh "github.com/rinosukmandityo/maknews/repositories/helper"
 	. "github.com/rinosukmandityo/maknews/services"
@@ -43,6 +45,16 @@ var (
 	newsService NewsService
 )
 
+type TestTable struct {
+	name        string
+	expected    string
+	expectedErr error
+	errMsg      string
+	updatedData []map[string]interface{}
+	filter      []map[string]interface{}
+	data        []m.News
+}
+
 func ListTestData() []m.News {
 	return []m.News{{
 		ID:      1,
@@ -64,96 +76,185 @@ func ListTestData() []m.News {
 
 func init() {
 	repo := rh.ChooseRepo()
-	newsService = logic.NewNewsService(repo)
+	cacheRepo := rh.RedisRepo()
+	elasticRepo := rh.ElasticRepo()
+	kafkaRepo := rh.KafkaConnection()
+	newsService = logic.NewNewsService(repo, cacheRepo, elasticRepo, kafkaRepo)
 }
 
 func TestNewsService(t *testing.T) {
 	t.Run("Insert Data", InsertData)
 	t.Run("Update Data", UpdateData)
 	t.Run("Delete Data", DeleteData)
+	t.Run("Get Data By ID", GetDataById)
 	t.Run("Get Data", GetData)
 }
 
 func InsertData(t *testing.T) {
-	testdata := ListTestData()
-	wg := sync.WaitGroup{}
+	tts := []TestTable{
+		{
+			name:        "Case: Positive Test",
+			expected:    "",
+			expectedErr: nil,
+			errMsg:      "[ERROR] - Failed to save data",
+			data:        ListTestData(),
+		},
+	}
 
 	// Clean test data if any
-	for _, data := range testdata {
-		wg.Add(1)
-		go func(_data m.News) {
-			newsService.Delete(_data.ID)
-			wg.Done()
-		}(data)
+	for _, _data := range ListTestData() {
+		newsService.Delete(_data)
 	}
-	wg.Wait()
+	time.Sleep(time.Second * 1)
 
-	t.Run("Case 1: Save data", func(t *testing.T) {
-		for _, data := range testdata {
-			wg.Add(1)
-			go func(_data m.News) {
-				if e := newsService.Store(&_data); e != nil {
-					t.Errorf("[ERROR] - Failed to save data %s ", e.Error())
+	for _, tt := range tts {
+		for _, _data := range tt.data {
+			t.Run(tt.name, func(t *testing.T) {
+				if e := newsService.Store(&_data); e != tt.expectedErr {
+					t.Errorf("%s %s ", tt.errMsg, e.Error())
 				}
-				wg.Done()
-			}(data)
+				res, e := newsService.GetById(_data.ID)
+				if e != nil || res.ID == 0 {
+					t.Errorf("[ERROR] - Failed to get data")
+				}
+			})
 		}
-		wg.Wait()
-
-		for _, data := range testdata {
-			res, e := newsService.GetById(data.ID)
-			if e != nil || res.ID == 0 {
-				t.Errorf("[ERROR] - Failed to get data")
-			}
-		}
-	})
+	}
+	time.Sleep(time.Second * 1)
 }
 
 func UpdateData(t *testing.T) {
-	testdata := ListTestData()
-	t.Run("Case 1: Update data", func(t *testing.T) {
-		_data := testdata[0]
-		data := map[string]interface{}{"author": _data.Author + "UPDATED"}
-		if _, e := newsService.Update(data, _data.ID); e != nil {
-			t.Errorf("[ERROR] - Failed to update data %s ", e.Error())
+	tts := []TestTable{
+		{
+			name:        "Case: Positive Test",
+			expected:    "",
+			expectedErr: nil,
+			errMsg:      "[ERROR] - Failed to update data",
+			data:        []m.News{ListTestData()[0]},
+			updatedData: []map[string]interface{}{
+				{"author": ListTestData()[0].Author + "UPDATED"},
+			},
+		},
+		{
+			name:        "Case: Negative Test",
+			expected:    "",
+			expectedErr: helper.ErrDataNotFound,
+			errMsg:      fmt.Sprintf("[ERROR] - It should be error '%s'", helper.ErrDataNotFound.Error()),
+			data:        []m.News{{ID: -9999}},
+			updatedData: []map[string]interface{}{
+				{"author": "Data Not Exists"},
+			},
+		},
+	}
+
+	for _, tt := range tts {
+		testdata := tt.data
+		for i, _data := range testdata {
+			t.Run(tt.name, func(t *testing.T) {
+				if _, e := newsService.Update(tt.updatedData[i], _data.ID); e != tt.expectedErr {
+					if !strings.Contains(e.Error(), tt.expectedErr.Error()) {
+						t.Errorf("%s %s ", tt.errMsg, e.Error())
+					}
+				}
+			})
 		}
-	})
-	t.Run("Case 2: Negative Test", func(t *testing.T) {
-		_data := m.News{ID: -999}
-		data := map[string]interface{}{"id": _data.ID}
-		if _, e := newsService.Update(data, _data.ID); e == nil {
-			t.Error("[ERROR] - It should be error 'User Not Found'")
-		}
-	})
+	}
 }
 
 func DeleteData(t *testing.T) {
-	testdata := ListTestData()
-	t.Run("Case 1: Delete data", func(t *testing.T) {
-		_data := testdata[1]
-		if e := newsService.Delete(_data); e != nil {
-			t.Errorf("[ERROR] - Failed to delete data %s ", e.Error())
+	tts := []TestTable{
+		{
+			name:        "Case: Positive Test",
+			expected:    "",
+			expectedErr: nil,
+			errMsg:      "[ERROR] - Failed to delete data",
+			data:        []m.News{ListTestData()[1]},
+		},
+		{
+			name:        "Case: Negative Test",
+			expected:    "",
+			expectedErr: helper.ErrDataNotFound,
+			errMsg:      fmt.Sprintf("[ERROR] - It should be error '%s'", helper.ErrDataNotFound.Error()),
+			data:        []m.News{ListTestData()[1]},
+		},
+	}
+
+	for _, tt := range tts {
+		testdata := tt.data
+		for _, data := range testdata {
+			t.Run(tt.name, func(t *testing.T) {
+				if e := newsService.Delete(data); e != tt.expectedErr {
+					if !strings.Contains(e.Error(), tt.expectedErr.Error()) {
+						t.Errorf("%s %s", tt.errMsg, e.Error())
+					}
+				}
+			})
 		}
-	})
-	t.Run("Case 2: Negative Test", func(t *testing.T) {
-		_data := testdata[1]
-		if e := newsService.Delete(_data); e == nil {
-			t.Error("[ERROR] - It should be error 'User Not Found'")
+	}
+}
+
+func GetDataById(t *testing.T) {
+	tts := []TestTable{
+		{
+			name:        "Case: Positive Test",
+			expected:    "",
+			expectedErr: nil,
+			errMsg:      "[ERROR] - Failed to get data",
+			filter:      []map[string]interface{}{{"id": ListTestData()[0].ID}},
+		},
+		{
+			name:        "Case: Negative Test",
+			expected:    "",
+			expectedErr: helper.ErrDataNotFound,
+			errMsg:      fmt.Sprintf("[ERROR] - It should be error '%s'", helper.ErrDataNotFound.Error()),
+			filter:      []map[string]interface{}{{"id": -9999}},
+		},
+	}
+
+	for _, tt := range tts {
+		for _, filter := range tt.filter {
+			t.Run(tt.name, func(t *testing.T) {
+				if _, e := newsService.GetById(filter["id"].(int)); e != tt.expectedErr {
+					if !strings.Contains(e.Error(), tt.expectedErr.Error()) {
+						t.Errorf("%s %s ", tt.errMsg, e.Error())
+					}
+				}
+			})
 		}
-	})
+	}
 }
 
 func GetData(t *testing.T) {
-	testdata := ListTestData()
-	t.Run("Case 1: Get data", func(t *testing.T) {
-		_data := testdata[0]
-		if _, e := newsService.GetById(_data.ID); e != nil {
-			t.Errorf("[ERROR] - Failed to get data %s ", e.Error())
+	tts := []TestTable{
+		{
+			name:        "Case: Positive Test",
+			expected:    "",
+			expectedErr: nil,
+			errMsg:      "[ERROR] - Failed to get data",
+			filter:      []map[string]interface{}{{"offset": 0, "limit": 10}},
+		},
+		{
+			name:        "Case: Negative Test",
+			expected:    "",
+			expectedErr: errors.New("Offset can not be less than zero"),
+			errMsg:      fmt.Sprintf("[ERROR] - It should be error '%s'", helper.ErrDataNotFound.Error()),
+			filter:      []map[string]interface{}{{"offset": -1, "limit": -10}},
+		},
+	}
+
+	for _, tt := range tts {
+		for _, filter := range tt.filter {
+			t.Run(tt.name, func(t *testing.T) {
+				payload := m.GetPayload{
+					Offset: filter["offset"].(int),
+					Limit:  filter["limit"].(int),
+				}
+				if _, e := newsService.GetData(payload); e != tt.expectedErr {
+					if !strings.Contains(e.Error(), tt.expectedErr.Error()) {
+						t.Errorf("%s %s ", tt.errMsg, e.Error())
+					}
+				}
+			})
 		}
-	})
-	t.Run("Case 2: Negative Test", func(t *testing.T) {
-		if _, e := newsService.GetById(-999); e == nil {
-			t.Error("[ERROR] - It should be error 'User Not Found'")
-		}
-	})
+	}
 }

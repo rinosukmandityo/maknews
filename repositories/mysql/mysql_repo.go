@@ -125,14 +125,14 @@ func (r *newsMySQLRepository) Store(data *m.News) error {
 	defer conn.Close()
 
 	q, dataField := constructStoreQuery(data)
-	tx, e := db.Begin()
+
+	stmt, e := conn.PrepareContext(ctx, q)
 	if e != nil {
 		return errors.Wrap(e, "repository.News.Store")
 	}
-	if _, e = tx.ExecContext(ctx, q, dataField...); e != nil {
+	if _, e := stmt.Exec(dataField...); e != nil {
 		return errors.Wrap(e, "repository.News.Store")
 	}
-	tx.Commit()
 
 	return nil
 
